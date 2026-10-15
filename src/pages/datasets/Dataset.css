@@ -1,0 +1,456 @@
+
+/* ===== CALIDAD Y PREPARACIÓN DE DATASETS ===== */
+
+.dataset-quality-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.quality-demo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.quality-demo-notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.quality-demo-notice strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.quality-demo-notice p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.quality-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.quality-status-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 15px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  background: var(--card-bg, #ffffff);
+  font-size: 12px;
+}
+
+.quality-status-summary strong {
+  margin-left: 5px;
+  color: var(--text-primary, #1e293b);
+  font-size: 14px;
+}
+
+.quality-summary-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.quality-dot-ready {
+  background: #16a34a;
+}
+
+.quality-dot-review {
+  background: #d97706;
+}
+
+.quality-dot-pending {
+  background: #64748b;
+}
+
+.quality-datasets-panel {
+  min-width: 0;
+  padding: 22px 0;
+}
+
+.quality-panel-heading {
+  padding: 0 22px 18px;
+}
+
+.quality-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary, #64748b);
+}
+
+.quality-filter .source-status-filter {
+  min-width: 165px;
+}
+
+.quality-dataset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 22px;
+}
+
+.quality-dataset-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 13px;
+  background: var(--card-bg, #ffffff);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.quality-dataset-card:hover {
+  border-color: rgb(13 148 136 / 50%);
+  box-shadow: 0 6px 20px rgb(15 23 42 / 5%);
+}
+
+.quality-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 17px;
+}
+
+.quality-dataset-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: rgb(13 148 136 / 10%);
+  color: #0d9488;
+}
+
+.quality-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.quality-status-ready {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.quality-status-review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.quality-status-pending {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.quality-dataset-id {
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.quality-dataset-card h3 {
+  margin: 7px 0;
+  color: var(--text-primary, #1e293b);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.quality-dataset-description {
+  min-height: 38px;
+  margin: 0 0 16px;
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.quality-source-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  font-size: 11px;
+}
+
+.quality-source-line span {
+  color: var(--text-secondary, #64748b);
+}
+
+.quality-source-line strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.quality-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 9px;
+  font-size: 11px;
+}
+
+.quality-progress-heading span {
+  color: var(--text-secondary, #64748b);
+}
+
+.quality-progress-heading strong {
+  color: var(--text-primary, #1e293b);
+  font-size: 13px;
+}
+
+.quality-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--border-color, #e2e8f0);
+}
+
+.quality-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.quality-fill-good {
+  background: #16a34a;
+}
+
+.quality-fill-medium {
+  background: #d97706;
+}
+
+.quality-fill-low {
+  background: #dc2626;
+}
+
+.quality-issue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 17px 0;
+}
+
+.quality-issue-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 11px 9px;
+  border-radius: 8px;
+  background: var(--table-header-bg, #f8fafc);
+}
+
+.quality-issue-grid span {
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+}
+
+.quality-issue-grid strong {
+  color: var(--text-primary, #1e293b);
+  font-size: 15px;
+}
+
+.quality-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.quality-card-footer > span {
+  color: var(--text-secondary, #64748b);
+  font-size: 10px;
+}
+
+.quality-view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--border-color, #d8e0e9);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary, #334155);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quality-view-button:hover {
+  border-color: #0d9488;
+  color: #0d9488;
+}
+
+.quality-empty-state {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 50px 20px;
+  color: var(--text-secondary, #64748b);
+  text-align: center;
+}
+
+.quality-empty-state strong {
+  color: var(--text-primary, #1e293b);
+}
+
+.quality-empty-state span {
+  font-size: 12px;
+}
+
+.quality-detail-modal {
+  max-width: 680px;
+}
+
+.quality-detail-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 23px;
+  padding: 16px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  background: var(--table-header-bg, #f8fafc);
+}
+
+.quality-detail-overview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.quality-detail-overview > div span {
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+}
+
+.quality-detail-overview > div strong {
+  font-size: 27px;
+}
+
+.quality-detail-subtitle {
+  margin: 23px 0 12px;
+  font-size: 13px;
+}
+
+.quality-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-field-list > span {
+  padding: 7px 10px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 7px;
+  background: var(--table-header-bg, #f8fafc);
+  color: var(--text-primary, #334155);
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.quality-detail-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 9px;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.quality-detail-warning svg {
+  flex-shrink: 0;
+}
+
+.quality-detail-warning p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.quality-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.quality-detail-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+@media (max-width: 850px) {
+  .quality-dataset-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .quality-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .quality-filter {
+    width: 100%;
+  }
+
+  .quality-filter .source-status-filter {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .quality-dataset-grid {
+    padding: 0 14px;
+  }
+
+  .quality-datasets-panel {
+    padding-top: 18px;
+  }
+
+  .quality-issue-grid {
+    gap: 6px;
+  }
+
+  .quality-issue-grid > div {
+    padding: 10px 7px;
+  }
+
+  .quality-detail-actions {
+    flex-wrap: wrap;
+  }
+}
