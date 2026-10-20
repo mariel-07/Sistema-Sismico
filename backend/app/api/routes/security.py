@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import bcrypt
@@ -20,6 +20,7 @@ bearer = HTTPBearer(auto_error=False)
 ROLES = {
     "Administrador",
     "Analista ML",
+    "Operador de Alertas",
     "Operador de alertas",
     "Auditor",
     "Solo lectura",
@@ -136,7 +137,8 @@ def current_user(
 
 def require_roles(*roles: str):
     def dependency(user: SecurityUser = Depends(current_user)) -> SecurityUser:
-        if user.role not in roles:
+        normalized_allowed = {r.strip().lower() for r in roles}
+        if user.role.strip().lower() not in normalized_allowed:
             raise HTTPException(status_code=403, detail="No tienes permiso para esta operación.")
         return user
     return dependency

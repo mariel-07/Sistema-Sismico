@@ -1,4 +1,4 @@
-﻿.login-page {
+.login-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -135,6 +135,12 @@
   color: #64748b;
   font-size: 12px;
   text-align: center;
+}
+
+@media (max-width: 800px) {
+  .login-grid-container {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 480px) {

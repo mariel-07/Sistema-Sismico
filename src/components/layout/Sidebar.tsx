@@ -12,6 +12,7 @@ import {
   FileClock,
   FileText,
   Globe,
+  Lock,
   MapPin,
   Settings,
   ShieldCheck,
@@ -19,6 +20,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccessModule, getRoleInfo, normalizeRole } from "../../utils/permissions";
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -40,15 +43,7 @@ interface MenuSection {
   items: MenuItem[];
 }
 
-/* =========================================================
-   MENÚ PRINCIPAL SEPMS
-========================================================= */
-
 const sections: MenuSection[] = [
-  /* =======================================================
-     MONITOREO SÍSMICO
-  ======================================================== */
-
   {
     id: "monitoring",
     title: "MONITOREO SÍSMICO",
@@ -76,11 +71,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     PREDICCIÓN Y ANALÍTICA ML
-  ======================================================== */
-
   {
     id: "ml",
     title: "PREDICCIÓN Y ANALÍTICA ML",
@@ -103,11 +93,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     ALERTAS RESPONSABLES
-  ======================================================== */
-
   {
     id: "alerts",
     title: "ALERTAS RESPONSABLES",
@@ -125,11 +110,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     FUENTES DE DATOS
-  ======================================================== */
-
   {
     id: "sources",
     title: "FUENTES DE DATOS",
@@ -147,11 +127,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     REPORTES EMPRESARIALES
-  ======================================================== */
-
   {
     id: "reports",
     title: "REPORTES EMPRESARIALES",
@@ -169,11 +144,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     ADMINISTRACIÓN
-  ======================================================== */
-
   {
     id: "admin",
     title: "ADMINISTRACIÓN",
@@ -191,11 +161,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     CONFIGURACIÓN
-  ======================================================== */
-
   {
     id: "settings",
     title: "CONFIGURACIÓN",
@@ -213,11 +178,6 @@ const sections: MenuSection[] = [
       },
     ],
   },
-
-  /* =======================================================
-     AYUDA Y SOPORTE
-  ======================================================== */
-
   {
     id: "help",
     title: "AYUDA Y SOPORTE",
@@ -237,17 +197,12 @@ const sections: MenuSection[] = [
   },
 ];
 
-/* =========================================================
-   BUSCAR SECCIÓN ACTIVA
-========================================================= */
-
 function findActiveSection(pathname: string): string | null {
   for (const section of sections) {
     const hasMatch = section.items.some(
       (item) =>
         pathname === item.path ||
-        (item.path !== "/" &&
-          pathname.startsWith(`${item.path}/`)),
+        (item.path !== "/" && pathname.startsWith(`${item.path}/`)),
     );
 
     if (hasMatch) {
@@ -258,10 +213,6 @@ function findActiveSection(pathname: string): string | null {
   return null;
 }
 
-/* =========================================================
-   SIDEBAR
-========================================================= */
-
 export default function Sidebar({
   mobileOpen,
   onClose,
@@ -269,37 +220,26 @@ export default function Sidebar({
   onToggle,
 }: SidebarProps) {
   const location = useLocation();
+  const { user } = useAuth();
+
+  const currentRole = normalizeRole(user?.role);
+  const roleInfo = getRoleInfo(currentRole);
 
   const [openSection, setOpenSection] = useState<string | null>(
     () => findActiveSection(location.pathname) ?? "monitoring",
   );
 
-  /* =======================================================
-     ABRIR AUTOMÁTICAMENTE LA SECCIÓN ACTIVA
-  ======================================================== */
-
   useEffect(() => {
-    const activeSection = findActiveSection(
-      location.pathname,
-    );
-
+    const activeSection = findActiveSection(location.pathname);
     if (activeSection) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpenSection(activeSection);
     }
   }, [location.pathname]);
 
-  /* =======================================================
-     CERRAR MENÚ MÓVIL AL CAMBIAR DE PÁGINA
-  ======================================================== */
-
   useEffect(() => {
     onClose();
   }, [location.pathname, onClose]);
-
-  /* =======================================================
-     MANEJAR APERTURA DE SECCIONES
-  ======================================================== */
 
   function handleSectionClick(sectionId: string) {
     if (collapsed) {
@@ -308,21 +248,11 @@ export default function Sidebar({
       return;
     }
 
-    setOpenSection((current) =>
-      current === sectionId ? null : sectionId,
-    );
+    setOpenSection((current) => (current === sectionId ? null : sectionId));
   }
-
-  /* =======================================================
-     RENDER
-  ======================================================== */
 
   return (
     <>
-      {/* ===================================================
-          FONDO PARA MENÚ MÓVIL
-      ==================================================== */}
-
       {mobileOpen && (
         <button
           type="button"
@@ -331,10 +261,6 @@ export default function Sidebar({
           onClick={onClose}
         />
       )}
-
-      {/* ===================================================
-          SIDEBAR
-      ==================================================== */}
 
       <aside
         className={[
@@ -346,16 +272,10 @@ export default function Sidebar({
           .join(" ")}
         aria-label="Barra lateral de navegación SEPMS"
       >
-        {/* =================================================
-            MARCA SEPMS
-        ================================================== */}
-
+        {/* Marca */}
         <div className="sidebar-brand">
           <div className="brand-icon">
-            <Activity
-              size={25}
-              strokeWidth={2}
-            />
+            <Activity size={25} strokeWidth={2} />
           </div>
 
           {!collapsed && (
@@ -375,86 +295,65 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* =================================================
-            ESTADO DEL SISTEMA
-        ================================================== */}
-
+        {/* Estado del sistema con rol activo */}
         <div
           className="sidebar-status"
-          title={
-            collapsed
-              ? "Plataforma de monitoreo activa"
-              : undefined
-          }
+          title={`Rol activo: ${currentRole} — ${roleInfo.tagline}`}
         >
-          <span className="status-dot" />
+          <span
+            className="status-dot"
+            style={{ backgroundColor: roleInfo.color }}
+          />
 
           {!collapsed && (
-            <span>
-              Plataforma de monitoreo
-            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <span style={{ fontWeight: 600, fontSize: "0.8rem" }}>
+                {roleInfo.shortName} ({currentRole})
+              </span>
+            </div>
           )}
         </div>
 
-        {/* =================================================
-            NAVEGACIÓN
-        ================================================== */}
+        {/* Navegación según el rol asignado */}
+        <nav className="sidebar-navigation" aria-label="Navegación principal">
+          {sections
+            .filter((section) => {
+              if (currentRole === "Administrador") return true;
+              return canAccessModule(currentRole, section.id);
+            })
+            .map((section) => {
+              const SectionIcon = section.icon;
+              const isOpen = openSection === section.id;
+            const isAllowed = canAccessModule(currentRole, section.id);
 
-        <nav
-          className="sidebar-navigation"
-          aria-label="Navegación principal"
-        >
-          {sections.map((section) => {
-            const SectionIcon = section.icon;
-
-            const isOpen =
-              openSection === section.id;
-
-            const hasActiveItem =
-              section.items.some(
-                (item) =>
-                  location.pathname === item.path ||
-                  (item.path !== "/" &&
-                    location.pathname.startsWith(
-                      `${item.path}/`,
-                    )),
-              );
+            const hasActiveItem = section.items.some(
+              (item) =>
+                location.pathname === item.path ||
+                (item.path !== "/" &&
+                  location.pathname.startsWith(`${item.path}/`)),
+            );
 
             return (
-              <div
-                className="sidebar-section"
-                key={section.id}
-              >
-                {/* =========================================
-                    CABECERA DE SECCIÓN
-                ========================================== */}
-
+              <div className="sidebar-section" key={section.id}>
                 <button
                   type="button"
                   className={[
                     "sidebar-section-toggle",
-                    hasActiveItem
-                      ? "section-has-active"
-                      : "",
-                    isOpen
-                      ? "section-expanded"
-                      : "",
+                    hasActiveItem ? "section-has-active" : "",
+                    isOpen ? "section-expanded" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  onClick={() =>
-                    handleSectionClick(
-                      section.id,
-                    )
-                  }
-                  aria-expanded={
-                    !collapsed && isOpen
-                  }
+                  onClick={() => handleSectionClick(section.id)}
+                  aria-expanded={!collapsed && isOpen}
                   title={
                     collapsed
-                      ? section.title
+                      ? `${section.title}${!isAllowed ? " (Restringido)" : ""}`
                       : undefined
                   }
+                  style={{
+                    opacity: isAllowed ? 1 : 0.65,
+                  }}
                 >
                   <SectionIcon
                     className="sidebar-section-icon"
@@ -468,13 +367,24 @@ export default function Sidebar({
                         {section.title}
                       </span>
 
+                      {!isAllowed && (
+                        <span
+                          title="Módulo con acceso restringido para tu rol"
+                          style={{
+                            marginRight: "4px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Lock size={12} style={{ color: "#94a3b8" }} />
+                        </span>
+                      )}
+
                       <ChevronDown
                         size={15}
                         className={[
                           "section-chevron",
-                          isOpen
-                            ? "chevron-open"
-                            : "",
+                          isOpen ? "chevron-open" : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
@@ -483,49 +393,36 @@ export default function Sidebar({
                   )}
                 </button>
 
-                {/* =========================================
-                    SUBMENÚ
-                ========================================== */}
-
                 {!collapsed && isOpen && (
                   <div className="sidebar-submenu">
-                    {section.items.map(
-                      (item) => {
-                        const ItemIcon =
-                          item.icon;
+                    {section.items.map((item) => {
+                      const ItemIcon = item.icon;
 
-                        return (
-                          <NavLink
-                            key={item.path}
-                            to={item.path}
-                            end
-                            onClick={onClose}
-                            className={({
-                              isActive,
-                            }) =>
-                              [
-                                "sidebar-submenu-link",
-                                isActive
-                                  ? "sidebar-submenu-link-active"
-                                  : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")
-                            }
-                          >
-                            <ItemIcon
-                              size={17}
-                              strokeWidth={1.8}
-                              className="submenu-icon"
-                            />
+                      return (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          end
+                          onClick={onClose}
+                          className={({ isActive }) =>
+                            [
+                              "sidebar-submenu-link",
+                              isActive ? "sidebar-submenu-link-active" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")
+                          }
+                        >
+                          <ItemIcon
+                            size={17}
+                            strokeWidth={1.8}
+                            className="submenu-icon"
+                          />
 
-                            <span>
-                              {item.label}
-                            </span>
-                          </NavLink>
-                        );
-                      },
-                    )}
+                          <span>{item.label}</span>
+                        </NavLink>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -533,26 +430,20 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* =================================================
-            PIE DEL SIDEBAR
-        ================================================== */}
-
+        {/* Pie del Sidebar con información de versión y perfil */}
         <div className="sidebar-footer">
-          <div className="sidebar-footer-icon">
-            <ShieldCheck
-              size={20}
-              strokeWidth={1.9}
-            />
+          <div
+            className="sidebar-footer-icon"
+            style={{ color: roleInfo.color }}
+          >
+            <ShieldCheck size={20} strokeWidth={1.9} />
           </div>
 
           {!collapsed && (
             <div className="sidebar-footer-info">
-              <strong>
-                Sistema SEPMS
-              </strong>
-
-              <span>
-                Versión 1.0
+              <strong>SEPMS Enterprise v2.0</strong>
+              <span title={roleInfo.persona} style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                {roleInfo.tagline}
               </span>
             </div>
           )}

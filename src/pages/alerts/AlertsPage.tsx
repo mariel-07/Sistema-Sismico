@@ -65,7 +65,7 @@ export default function AlertsPage() {
         createdAt: item.created_at, eventCode: item.event_code, isRead: item.is_read,
       })));
     }).catch(() => {
-      if (active) setLoadError("No se pudieron cargar las alertas. Comprueba que el backend est? disponible.");
+      if (active) setLoadError("No se pudieron cargar las alertas. Comprueba que el backend esté disponible.");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);

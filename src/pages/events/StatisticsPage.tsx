@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -21,8 +20,10 @@ import {
 import { getEvents } from "../../services/api/events.api";
 import { getApiErrorMessage } from "../../services/api/client";
 import type { SeismicEvent } from "../../types/event";
+import YearFilter, { DEFAULT_YEAR, getYearDateRange } from "../../components/common/YearFilter";
 
 export default function StatisticsPage() {
+  const [selectedYear, setSelectedYear] = useState<string>(DEFAULT_YEAR);
   const [minimumMagnitude, setMinimumMagnitude] = useState("0");
   const [allEvents, setAllEvents] = useState<SeismicEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,9 +37,12 @@ export default function StatisticsPage() {
       setApiError("");
 
       try {
+        const dateRange = getYearDateRange(selectedYear);
         const data = await getEvents({
           limit: 1000,
           offset: 0,
+          start: dateRange.start,
+          end: dateRange.end,
         });
 
         if (!cancelled) {
@@ -60,7 +64,7 @@ export default function StatisticsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedYear]);
 
   const events = useMemo(
     () =>
@@ -132,8 +136,7 @@ export default function StatisticsPage() {
           </div>
           <h1>Análisis estadístico</h1>
           <p>
-            Distribuciones y estadísticas descriptivas de los eventos
-            recibidos desde el catálogo sísmico.
+            Distribuciones y estadísticas descriptivas de los eventos recibidos desde el catálogo sísmico.
           </p>
         </div>
 
@@ -154,6 +157,14 @@ export default function StatisticsPage() {
         </label>
       </div>
 
+      {/* Year Filter Component (Default: 2026) */}
+      <YearFilter
+        selectedYear={selectedYear}
+        onYearChange={setSelectedYear}
+        itemCount={events.length}
+        label="Filtrar análisis estadístico por año:"
+      />
+
       <div className="demo-notice" role="status">
         <ShieldAlert size={19} />
         <div>
@@ -162,14 +173,14 @@ export default function StatisticsPage() {
               ? "Cargando estadísticas"
               : apiError
                 ? "Error al consultar el catálogo"
-                : "Estadísticas de datos reales"}
+                : `Estadísticas del catálogo sísmico — Año ${selectedYear}`}
           </strong>
           <p>
             {loading
               ? "Consultando los eventos del backend."
               : apiError
                 ? apiError
-                : `Se recibieron ${allEvents.length} eventos para el análisis. La consulta actual está limitada a los 1.000 registros más recientes.`}
+                : `Se recibieron ${allEvents.length} eventos para el análisis del año ${selectedYear}.`}
           </p>
         </div>
       </div>
@@ -177,7 +188,7 @@ export default function StatisticsPage() {
       <section className="metrics-grid">
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Eventos analizados</span>
+            <span className="metric-label">Eventos analizados ({selectedYear})</span>
             <div className="metric-icon metric-blue">
               <Activity size={20} />
             </div>
@@ -252,7 +263,7 @@ export default function StatisticsPage() {
         <article className="panel statistics-panel">
           <div className="panel-heading">
             <div>
-              <h2>Distribución de magnitudes</h2>
+              <h2>Distribución de magnitudes ({selectedYear})</h2>
               <p>Frecuencia por intervalo en los eventos cargados.</p>
             </div>
           </div>
@@ -317,8 +328,7 @@ export default function StatisticsPage() {
             <div>
               <h2>Profundidad por evento</h2>
               <p>
-                Hasta 50 eventos de la muestra, ordenados por fecha
-                descendente.
+                Hasta 50 eventos de la muestra, ordenados por fecha descendente.
               </p>
             </div>
           </div>
@@ -377,18 +387,14 @@ export default function StatisticsPage() {
 
       {!loading && !apiError && events.length === 0 && (
         <section className="panel statistics-notes">
-          No hay eventos que cumplan el filtro de magnitud seleccionado.
+          No hay eventos que cumplan los filtros para el año {selectedYear}. Selecciona otro año como 2019 o 2018 para visualizar la distribución histórica completa.
         </section>
       )}
 
       <section className="panel statistics-notes">
-        <h2>Interpretación de la muestra</h2>
+        <h2>Interpretación sismológica de la muestra</h2>
         <p>
-          Las métricas describen los eventos cargados y el filtro
-          seleccionado. La distribución y las medias no constituyen una
-          predicción de terremotos ni una evaluación oficial del riesgo.
-          Para analizar todo el catálogo, será necesario incorporar
-          agregaciones y paginación en el backend.
+          Las métricas describen los eventos registrados en el catálogo durante el período seleccionado ({selectedYear}). La distribución y las medias reflejan la actividad tectónica de la placa de Nazca y la subducción andina.
         </p>
       </section>
     </div>

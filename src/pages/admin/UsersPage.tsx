@@ -5,6 +5,7 @@ import {
   updateUser,
   type ApiUser,
 } from "../../services/api/users.api";
+import { getApiErrorMessage } from "../../services/api/client";
 import {
   UserRound,
   UserPlus,
@@ -105,10 +106,10 @@ export default function UsersPage() {
         if (active) {
           setUsers(data.map(mapApiUser));
         }
-      } catch {
+      } catch (err) {
         if (active) {
           setError(
-            "No se pudieron cargar los usuarios desde el backend.",
+            getApiErrorMessage(err),
           );
         }
       } finally {

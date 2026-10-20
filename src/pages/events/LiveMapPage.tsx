@@ -17,6 +17,7 @@ import type { LatLngExpression } from "leaflet";
 import { getMapEvents } from "../../services/api/events.api";
 import { getApiErrorMessage } from "../../services/api/client";
 import type { SeismicEvent } from "../../types/event";
+import YearFilter, { DEFAULT_YEAR } from "../../components/common/YearFilter";
 
 interface MapEvent {
   id: string;
@@ -60,6 +61,7 @@ function toMapEvent(event: SeismicEvent): MapEvent {
 }
 
 export default function LiveMapPage() {
+  const [selectedYear, setSelectedYear] = useState<string>(DEFAULT_YEAR);
   const [minimumMagnitude, setMinimumMagnitude] = useState("0");
   const [showEvents, setShowEvents] = useState(true);
   const [events, setEvents] = useState<MapEvent[]>([]);
@@ -105,12 +107,22 @@ export default function LiveMapPage() {
     };
   }, []);
 
+  const yearFilteredEvents = useMemo(() => {
+    if (!selectedYear || selectedYear === "Todos") return events;
+    return events.filter((e) => {
+      const match = e.time?.match(/\b(19\d\d|20\d\d)\b/);
+      if (match) return match[1] === selectedYear;
+      const parsed = new Date(e.time);
+      return !Number.isNaN(parsed.getTime()) && parsed.getUTCFullYear().toString() === selectedYear;
+    });
+  }, [events, selectedYear]);
+
   const visibleEvents = useMemo(
     () =>
-      events.filter(
+      yearFilteredEvents.filter(
         (event) => event.magnitude >= Number(minimumMagnitude),
       ),
-    [events, minimumMagnitude],
+    [yearFilteredEvents, minimumMagnitude],
   );
 
   const maximumMagnitude =
@@ -134,6 +146,14 @@ export default function LiveMapPage() {
           </p>
         </div>
       </div>
+
+      {/* Year Filter Component (Default: 2026) */}
+      <YearFilter
+        selectedYear={selectedYear}
+        onYearChange={setSelectedYear}
+        itemCount={visibleEvents.length}
+        label="Filtrar eventos del mapa por año:"
+      />
 
       <div className="demo-notice" role="status">
         <ShieldAlert size={19} />

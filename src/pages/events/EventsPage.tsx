@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import './events.css';
+import YearFilter, { DEFAULT_YEAR, getYearDateRange } from "../../components/common/YearFilter";
 import { getEvents } from "../../services/api/events.api";
 import { getApiErrorMessage } from "../../services/api/client";
 import type { SeismicEvent as ApiSeismicEvent } from "../../types/event";
@@ -131,6 +132,7 @@ function exportCsv(events: SeismicEvent[]) {
 }
 
 export default function EventsPage() {
+  const [selectedYear, setSelectedYear] = useState<string>(DEFAULT_YEAR);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Todos");
   const [minMagnitude, setMinMagnitude] = useState("0");
@@ -149,7 +151,13 @@ export default function EventsPage() {
       setLoading(true);
       setApiError("");
       try {
-        const data = await getEvents({ limit: 1000, offset: 0 });
+        const dateRange = getYearDateRange(selectedYear);
+        const data = await getEvents({
+          limit: 1000,
+          offset: 0,
+          start: dateRange.start,
+          end: dateRange.end,
+        });
         if (!cancelled) setEvents(data.map(mapApiEvent));
       } catch (error) {
         if (!cancelled) setApiError(getApiErrorMessage(error));
@@ -160,7 +168,7 @@ export default function EventsPage() {
 
     void loadEvents();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedYear]);
 
   const pageSize = 6;
 
@@ -234,6 +242,14 @@ export default function EventsPage() {
           Exportar CSV
         </button>
       </div>
+
+      {/* Year Filter Component (Default: 2026) */}
+      <YearFilter
+        selectedYear={selectedYear}
+        onYearChange={setSelectedYear}
+        itemCount={filteredEvents.length}
+        label="Filtrar catálogo sísmico por año:"
+      />
 
       <div className="demo-notice" role="status">
         <div className="demo-notice-icon">

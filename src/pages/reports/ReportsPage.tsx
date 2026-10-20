@@ -19,6 +19,7 @@ import { getEvents } from "../../services/api/events.api";
 import { getApiErrorMessage } from "../../services/api/client";
 import type { SeismicEvent } from "../../types/event";
 import "./reports.css";
+import YearFilter, { DEFAULT_YEAR } from "../../components/common/YearFilter";
 
 type ReportType = "events" | "magnitudes" | "locations" | "alerts" | "system";
 type ReportFormat = "pdf" | "excel";
@@ -112,6 +113,7 @@ function escapeCsv(value: string | number): string {
 }
 
 export default function ReportsPage() {
+  const [selectedYear, setSelectedYear] = useState<string>(DEFAULT_YEAR);
   const [reportType, setReportType] = useState<ReportType>("events");
   const [format, setFormat] = useState<ReportFormat>("pdf");
   const [startDate, setStartDate] = useState("");
@@ -271,7 +273,20 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    if (year === "Todos") {
+      setStartDate("");
+      setEndDate("");
+    } else {
+      setStartDate(`${year}-01-01`);
+      setEndDate(`${year}-12-31`);
+    }
+    setGenerated(false);
+  };
+
   const handleClear = () => {
+    setSelectedYear(DEFAULT_YEAR);
     setStartDate("");
     setEndDate("");
     setSearch("");
@@ -305,6 +320,14 @@ export default function ReportsPage() {
           </button>
         </div>
       </header>
+
+      {/* Year Filter Component (Default: 2026) */}
+      <YearFilter
+        selectedYear={selectedYear}
+        onYearChange={handleYearChange}
+        itemCount={filteredEvents.length}
+        label="Filtrar datos de reportes por año:"
+      />
 
       <section className="report-type-section">
         <div className="section-title">
