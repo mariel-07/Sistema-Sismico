@@ -1,5 +1,6 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getAlerts, updateAlert as updateAlertApi, type AlertRecord as ApiAlertRecord } from "../../services/api/alerts.api";
 import {
   Activity,
   AlertTriangle,
@@ -30,69 +31,6 @@ interface AlertRecord {
   isRead: boolean;
 }
 
-const initialAlerts: AlertRecord[] = [
-  {
-    id: "ALT-DEMO-005",
-    title: "Evento de demostración pendiente de revisión",
-    message:
-      "Se registró un evento ficticio para probar el flujo de revisión. Verifica los datos de la fuente antes de tomar decisiones.",
-    source: "Fuente sísmica de prueba A",
-    priority: "Alta",
-    status: "Pendiente",
-    createdAt: "2026-10-15T15:20:00",
-    eventCode: "EVT-DEMO-005",
-    isRead: false,
-  },
-  {
-    id: "ALT-DEMO-004",
-    title: "Control de calidad de datos",
-    message:
-      "El conjunto de datos de ejemplo contiene registros que requieren validación de calidad.",
-    source: "Validador de datasets",
-    priority: "Media",
-    status: "Pendiente",
-    createdAt: "2026-10-15T14:45:00",
-    eventCode: "DATA-DEMO-004",
-    isRead: false,
-  },
-  {
-    id: "ALT-DEMO-003",
-    title: "Revisión de conexión de fuente",
-    message:
-      "La fuente simulada no ha actualizado su información de prueba. Comprueba la conexión cuando el servicio esté integrado.",
-    source: "Fuente sísmica de prueba B",
-    priority: "Alta",
-    status: "Revisada",
-    createdAt: "2026-10-15T13:30:00",
-    eventCode: "SRC-DEMO-002",
-    isRead: true,
-  },
-  {
-    id: "ALT-DEMO-002",
-    title: "Experimento de análisis finalizado",
-    message:
-      "El experimento ficticio finalizó. Revisa sus métricas antes de aceptar los resultados.",
-    source: "Módulo de experimentos ML",
-    priority: "Baja",
-    status: "Atendida",
-    createdAt: "2026-10-15T11:10:00",
-    eventCode: "EXP-DEMO-002",
-    isRead: true,
-  },
-  {
-    id: "ALT-DEMO-001",
-    title: "Regla de alerta actualizada",
-    message:
-      "Se modificó una regla de demostración. Confirma los parámetros configurados.",
-    source: "Gestión de reglas",
-    priority: "Media",
-    status: "Atendida",
-    createdAt: "2026-10-14T16:25:00",
-    eventCode: "RULE-DEMO-001",
-    isRead: true,
-  },
-];
-
 const priorityClass: Record<Priority, string> = {
   Crítica: "alert-priority-critical",
   Alta: "alert-priority-high",
@@ -114,7 +52,23 @@ function formatAlertDate(value: string) {
 }
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<AlertRecord[]>(initialAlerts);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  useEffect(() => {
+    let active = true;
+    getAlerts().then((items) => {
+      if (active) setAlerts(items.map((item: ApiAlertRecord) => ({
+        id: item.id, title: item.title, message: item.message, source: item.source,
+        priority: item.priority as Priority, status: item.status,
+        createdAt: item.created_at, eventCode: item.event_code, isRead: item.is_read,
+      })));
+    }).catch(() => {
+      if (active) setLoadError("No se pudieron cargar las alertas. Comprueba que el backend esté disponible.");
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("Todas");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -164,37 +118,60 @@ export default function AlertsPage() {
       );
   }, [alerts, search, priorityFilter, statusFilter, unreadOnly]);
 
-  const updateAlert = (
-    id: string,
-    updates: Partial<AlertRecord>,
-  ) => {
-    setAlerts((current) =>
-      current.map((alert) =>
-        alert.id === id ? { ...alert, ...updates } : alert,
-      ),
-    );
+  const updateAlert = async (id: string, updates: Partial<AlertRecord>) => {
+    setActionError("");
+    const current = alerts.find((alert) => alert.id === id);
+    if (!current) return;
+    const apiUpdates: Record<string, unknown> = {};
+    if (updates.title !== undefined) apiUpdates.title = updates.title;
+    if (updates.message !== undefined) apiUpdates.message = updates.message;
+    if (updates.source !== undefined) apiUpdates.source = updates.source;
+    if (updates.priority !== undefined) apiUpdates.priority = updates.priority;
+    if (updates.status !== undefined) apiUpdates.status = updates.status;
+    if (updates.eventCode !== undefined) apiUpdates.event_code = updates.eventCode;
+    if (updates.isRead !== undefined) apiUpdates.is_read = updates.isRead;
 
-    setSelectedAlert((current) =>
-      current?.id === id ? { ...current, ...updates } : current,
-    );
+    try {
+      const saved = await updateAlertApi(id, apiUpdates);
+      const normalized: AlertRecord = {
+        id: saved.id, title: saved.title, message: saved.message, source: saved.source,
+        priority: saved.priority as Priority, status: saved.status,
+        createdAt: saved.created_at, eventCode: saved.event_code, isRead: saved.is_read,
+      };
+      setAlerts((items) => items.map((alert) => alert.id === id ? normalized : alert));
+      setSelectedAlert((alert) => alert?.id === id ? normalized : alert);
+    } catch {
+      setActionError("No se pudo guardar el cambio. Int?ntalo de nuevo.");
+    }
   };
 
-  const markAllAsRead = () => {
-    setAlerts((current) =>
-      current.map((alert) => ({ ...alert, isRead: true })),
-    );
-    setSelectedAlert((current) =>
-      current ? { ...current, isRead: true } : current,
-    );
+  const markAllAsRead = async () => {
+    setActionError("");
+    const unread = alerts.filter((alert) => !alert.isRead);
+    for (const alert of unread) {
+      try {
+        const saved = await updateAlertApi(alert.id, { is_read: true });
+        const normalized: AlertRecord = {
+          id: saved.id, title: saved.title, message: saved.message, source: saved.source,
+          priority: saved.priority as Priority, status: saved.status,
+          createdAt: saved.created_at, eventCode: saved.event_code, isRead: saved.is_read,
+        };
+        setAlerts((items) => items.map((item) => item.id === alert.id ? normalized : item));
+        setSelectedAlert((item) => item?.id === alert.id ? normalized : item);
+      } catch {
+        setActionError("No se pudieron marcar todas como le?das. Revisa la conexi?n e int?ntalo otra vez.");
+        break;
+      }
+    }
   };
 
   const resetDemo = () => {
-    setAlerts(initialAlerts);
     setSearch("");
     setPriorityFilter("Todas");
     setStatusFilter("Todos");
     setUnreadOnly(false);
     setSelectedAlert(null);
+    setActionError("");
   };
 
   return (
@@ -225,7 +202,7 @@ export default function AlertsPage() {
             className="secondary-button"
             onClick={resetDemo}
           >
-            Restablecer demo
+            Limpiar filtros
           </button>
         </div>
       </div>
@@ -233,7 +210,7 @@ export default function AlertsPage() {
       <div className="alerts-demo-banner">
         <Info size={19} />
         <div>
-          <strong>Notificaciones simuladas</strong>
+          <strong>Notificaciones registradas</strong>
           <span>
             Estos ejemplos no son avisos oficiales ni indican que vaya a ocurrir
             un sismo. Las alertas reales deberán proceder de fuentes verificadas
@@ -242,6 +219,9 @@ export default function AlertsPage() {
         </div>
       </div>
 
+      {loading && <p role="status">Cargando alertas?</p>}
+      {loadError && <p role="alert">{loadError}</p>}
+      {actionError && <p role="alert">{actionError}</p>}
       <section className="metrics-grid alerts-metrics">
         <article className="metric-card">
           <div className="metric-top">
@@ -284,7 +264,7 @@ export default function AlertsPage() {
             </span>
           </div>
           <div className="metric-value">{unreadCount}</div>
-          <p className="metric-description">Notificaciones nuevas de ejemplo</p>
+          <p className="metric-description">Notificaciones sin leer</p>
         </article>
       </section>
 
@@ -349,7 +329,7 @@ export default function AlertsPage() {
         </div>
 
         <div className="alerts-list">
-          {filteredAlerts.map((alert) => (
+          {!loading && !loadError && filteredAlerts.map((alert) => (
             <article
               key={alert.id}
               className={`alert-item ${!alert.isRead ? "alert-item-unread" : ""}`}
@@ -431,7 +411,7 @@ export default function AlertsPage() {
             </article>
           ))}
 
-          {filteredAlerts.length === 0 && (
+          {!loading && !loadError && filteredAlerts.length === 0 && (
             <div className="alerts-empty">
               <Bell size={30} />
               <strong>No hay alertas que coincidan</strong>

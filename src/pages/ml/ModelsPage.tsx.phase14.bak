@@ -1,0 +1,160 @@
+﻿import { useEffect, useState } from "react";
+import { BrainCircuit, RefreshCw } from "lucide-react";
+import { getMlAnalysis, type MlAnalysis } from "../../services/api/ml";
+import { getApiErrorMessage } from "../../services/api/client";
+import "./ml.css";
+
+export default function ModelsPage() {
+  const [analysis, setAnalysis] = useState<MlAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function loadAnalysis() {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await getMlAnalysis();
+      setAnalysis(result);
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAnalysis();
+  }, []);
+
+  const metrics = analysis?.metrics;
+
+  return (
+    <main className="module-page ml-models-page">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">INTELIGENCIA ARTIFICIAL</span>
+          <h1>Registro de modelos</h1>
+          <p>Estado real de los análisis estadísticos disponibles en el sistema.</p>
+        </div>
+        <div className="ml-models-heading-icon">
+          <BrainCircuit size={28} />
+        </div>
+      </header>
+
+      <div className="demo-notice">
+        <BrainCircuit size={18} />
+        <p>
+          <strong>Estado transparente:</strong> no hay modelos predictivos
+          entrenados y validados registrados. Está disponible un análisis
+          estadístico descriptivo de los eventos históricos; no predice
+          terremotos futuros.
+        </p>
+      </div>
+
+      <section className="panel ml-models-panel">
+        <div className="panel-heading ml-models-panel-heading">
+          <div>
+            <h2>Análisis estadístico histórico</h2>
+            <p>Referencia calculada desde los datos reales de la plataforma.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadAnalysis()}
+            disabled={loading}
+          >
+            <RefreshCw size={16} />
+            {loading ? "Actualizando..." : "Actualizar"}
+          </button>
+        </div>
+
+        {loading && <p role="status">Consultando análisis histórico...</p>}
+
+        {error && (
+          <div role="alert">
+            <p>No se pudo cargar el análisis: {error}</p>
+            <button type="button" className="secondary-button" onClick={() => void loadAnalysis()}>
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && analysis && (
+          <>
+            <section className="metrics-grid ml-models-metrics">
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-label">Eventos analizados</span>
+                  <span className="metric-icon metric-blue"><BrainCircuit size={20} /></span>
+                </div>
+                <div className="metric-value">{analysis.sample_count.toLocaleString("es-PE")}</div>
+                <p className="metric-description">Registros históricos incluidos</p>
+              </article>
+
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-label">Magnitud media</span>
+                  <span className="metric-icon metric-violet"><BrainCircuit size={20} /></span>
+                </div>
+                <div className="metric-value">{metrics?.mean_magnitude?.toFixed(2) ?? "—"}</div>
+                <p className="metric-description">Promedio observado</p>
+              </article>
+
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-label">Magnitud máxima</span>
+                  <span className="metric-icon metric-orange"><BrainCircuit size={20} /></span>
+                </div>
+                <div className="metric-value">{metrics?.max_magnitude?.toFixed(2) ?? "—"}</div>
+                <p className="metric-description">Máximo del conjunto analizado</p>
+              </article>
+
+              <article className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-label">Profundidad media</span>
+                  <span className="metric-icon metric-teal"><BrainCircuit size={20} /></span>
+                </div>
+                <div className="metric-value">
+                  {metrics?.mean_depth_km?.toFixed(2) ?? "—"} <small>km</small>
+                </div>
+                <p className="metric-description">Promedio observado</p>
+              </article>
+            </section>
+
+            <div className="ml-models-table-wrap">
+              <table className="ml-models-table">
+                <thead>
+                  <tr><th>Componente</th><th>Estado</th><th>Detalle</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Análisis histórico</td>
+                    <td><span className="ml-model-status ml-model-status--experimental">Disponible</span></td>
+                    <td>Estadística descriptiva, no predictiva</td>
+                  </tr>
+                  <tr>
+                    <td>Entrenamiento de modelos</td>
+                    <td><span className="ml-model-status ml-model-status--archived">No implementado</span></td>
+                    <td>No se atribuyen algoritmos ni métricas de validación inexistentes</td>
+                  </tr>
+                  <tr>
+                    <td>Predicción de terremotos</td>
+                    <td><span className="ml-model-status ml-model-status--archived">No disponible</span></td>
+                    <td>El sistema no pronostica fecha, ubicación ni magnitud futura</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="demo-notice">
+              <p>
+                <strong>Limitaciones:</strong> los promedios describen los eventos
+                observados. No son estimaciones de riesgo ni predicciones futuras.
+              </p>
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}

@@ -1,21 +1,25 @@
-
-from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
 from app.core.config import settings
-from app.db.session import SessionLocal, engine
-
+from app.api.routes.database import router as database_router
+from app.api.routes.events import router as events_router
+from app.api.routes.sources import router as sources_router
+from app.api.routes.ingestion import router as ingestion_router
+from app.api.routes.datasets import router as datasets_router
+from app.api.routes.alerts import router as alerts_router
+from app.api.routes.ml import router as ml_router
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description=(
-        "API del Sistema Empresarial de Predicción "
-        "y Monitoreo Sísmico (SEPMS)."
+        "Sistema Empresarial de PredicciÃ³n y Monitoreo SÃ­smico "
+        "(SEPMS). Plataforma para monitoreo, anÃ¡lisis histÃ³rico, "
+        "Machine Learning experimental y gestiÃ³n responsable de alertas."
     ),
-    debug=settings.DEBUG,
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,48 +30,50 @@ app.add_middleware(
 )
 
 
-@app.get("/", tags=["Sistema"])
-def root() -> dict[str, str]:
+app.include_router(
+    database_router,
+    prefix=settings.API_V1_PREFIX,
+    
+)
+app.include_router(
+    events_router,
+    prefix=settings.API_V1_PREFIX,
+)
+app.include_router(
+    sources_router,
+    prefix=settings.API_V1_PREFIX,
+)
+app.include_router(
+    ingestion_router,
+    prefix=settings.API_V1_PREFIX,
+)
+app.include_router(
+    datasets_router,
+    prefix=settings.API_V1_PREFIX,
+)
+app.include_router(alerts_router, prefix=settings.API_V1_PREFIX)
+app.include_router(ml_router, prefix=settings.API_V1_PREFIX)
+
+
+
+
+@app.get("/")
+def root():
     return {
-        "name": settings.APP_NAME,
+        "application": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "message": "API SEPMS disponible",
-        "docs": "/docs",
+        "environment": settings.ENVIRONMENT,
+        "status": "online",
     }
 
 
-@app.get(f"{settings.API_V1_PREFIX}/health", tags=["Sistema"])
-def health_check() -> dict[str, str]:
+@app.get("/api/v1/status")
+def status():
     return {
         "status": "ok",
         "service": "SEPMS API",
+        "database": "configured",
     }
 
-
-@app.get(f"{settings.API_V1_PREFIX}/system/status", tags=["Sistema"])
-def system_status() -> dict[str, str]:
-    if engine is None or SessionLocal is None:
-        return {
-            "api": "ok",
-            "database": "not_configured",
-            "message": "Configura DATABASE_URL en backend/.env",
-        }
-
-    try:
-        with SessionLocal() as db:
-            db.execute(text("SELECT 1"))
-
-        return {
-            "api": "ok",
-            "database": "connected",
-        }
-
-    except Exception as exc:
-        # El detalle técnico se registra en el servidor, no se expone
-        # al cliente porque podría contener información sensible.
-        print(f"Error de conexión a la base de datos: {type(exc).__name__}")
-
-        raise HTTPException(
-            status_code=503,
-            detail="No se pudo conectar con la base de datos.",
-        ) from exc
+from app.api.routes.security import router as security_router
+app.include_router(security_router, prefix=settings.API_V1_PREFIX)

@@ -12,6 +12,7 @@ import {
   FileClock,
   FileText,
   Globe,
+  Lock,
   MapPin,
   Settings,
   ShieldCheck,
@@ -19,6 +20,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { canAccessModule, getRoleInfo, normalizeRole } from "../../utils/permissions";
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -46,9 +49,21 @@ const sections: MenuSection[] = [
     title: "MONITOREO SÍSMICO",
     icon: Globe,
     items: [
-      { label: "Panel de Control", path: "/dashboard", icon: Activity },
-      { label: "Eventos Recientes", path: "/events", icon: FileText },
-      { label: "Mapa en Vivo", path: "/map", icon: MapPin },
+      {
+        label: "Panel de Control",
+        path: "/dashboard",
+        icon: Activity,
+      },
+      {
+        label: "Eventos Recientes",
+        path: "/events",
+        icon: FileText,
+      },
+      {
+        label: "Mapa en Vivo",
+        path: "/map",
+        icon: MapPin,
+      },
       {
         label: "Análisis Estadístico",
         path: "/statistics",
@@ -83,10 +98,14 @@ const sections: MenuSection[] = [
     title: "ALERTAS RESPONSABLES",
     icon: BellRing,
     items: [
-      { label: "Centro de Alertas", path: "/alerts", icon: BellRing },
+      {
+        label: "Centro de Alertas",
+        path: "/alerts",
+        icon: BellRing,
+      },
       {
         label: "Reglas de Alertas",
-        path: "/alert-rules",
+        path: "/alerts/rules",
         icon: ShieldCheck,
       },
     ],
@@ -113,7 +132,11 @@ const sections: MenuSection[] = [
     title: "REPORTES EMPRESARIALES",
     icon: FileChartColumn,
     items: [
-      { label: "Generar Reportes", path: "/reports", icon: FileText },
+      {
+        label: "Generar Reportes",
+        path: "/reports",
+        icon: FileText,
+      },
       {
         label: "Exportaciones",
         path: "/reports/exports",
@@ -126,7 +149,11 @@ const sections: MenuSection[] = [
     title: "ADMINISTRACIÓN",
     icon: Users,
     items: [
-      { label: "Usuarios", path: "/admin/users", icon: Users },
+      {
+        label: "Usuarios",
+        path: "/admin/users",
+        icon: Users,
+      },
       {
         label: "Roles y Permisos",
         path: "/admin/roles",
@@ -156,8 +183,16 @@ const sections: MenuSection[] = [
     title: "AYUDA Y SOPORTE",
     icon: CircleHelp,
     items: [
-      { label: "Guías Técnicas", path: "/help/guides", icon: BookOpen },
-      { label: "Centro de Ayuda", path: "/help", icon: CircleHelp },
+      {
+        label: "Guías Técnicas",
+        path: "/help/guides",
+        icon: BookOpen,
+      },
+      {
+        label: "Centro de Ayuda",
+        path: "/help",
+        icon: CircleHelp,
+      },
     ],
   },
 ];
@@ -185,24 +220,26 @@ export default function Sidebar({
   onToggle,
 }: SidebarProps) {
   const location = useLocation();
+  const { user } = useAuth();
+
+  const currentRole = normalizeRole(user?.role);
+  const roleInfo = getRoleInfo(currentRole);
 
   const [openSection, setOpenSection] = useState<string | null>(
     () => findActiveSection(location.pathname) ?? "monitoring",
   );
 
-  // Abre automáticamente la sección de la ruta actual.
   useEffect(() => {
     const activeSection = findActiveSection(location.pathname);
-
     if (activeSection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpenSection(activeSection);
     }
   }, [location.pathname]);
 
-  // Cierra el menú móvil después de cambiar de página.
   useEffect(() => {
     onClose();
-  }, [location.pathname]);
+  }, [location.pathname, onClose]);
 
   function handleSectionClick(sectionId: string) {
     if (collapsed) {
@@ -211,9 +248,7 @@ export default function Sidebar({
       return;
     }
 
-    setOpenSection((current) =>
-      current === sectionId ? null : sectionId,
-    );
+    setOpenSection((current) => (current === sectionId ? null : sectionId));
   }
 
   return (
@@ -235,11 +270,12 @@ export default function Sidebar({
         ]
           .filter(Boolean)
           .join(" ")}
-        aria-label="Barra lateral"
+        aria-label="Barra lateral de navegación SEPMS"
       >
+        {/* Marca */}
         <div className="sidebar-brand">
           <div className="brand-icon">
-            <Activity size={25} />
+            <Activity size={25} strokeWidth={2} />
           </div>
 
           {!collapsed && (
@@ -259,20 +295,36 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="sidebar-status">
-          <span className="status-dot" />
+        {/* Estado del sistema con rol activo */}
+        <div
+          className="sidebar-status"
+          title={`Rol activo: ${currentRole} — ${roleInfo.tagline}`}
+        >
+          <span
+            className="status-dot"
+            style={{ backgroundColor: roleInfo.color }}
+          />
+
           {!collapsed && (
-            <span>Plataforma de monitoreo</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <span style={{ fontWeight: 600, fontSize: "0.8rem" }}>
+                {roleInfo.shortName} ({currentRole})
+              </span>
+            </div>
           )}
         </div>
 
-        <nav
-          className="sidebar-navigation"
-          aria-label="Navegación principal"
-        >
-          {sections.map((section) => {
-            const SectionIcon = section.icon;
-            const isOpen = openSection === section.id;
+        {/* Navegación según el rol asignado */}
+        <nav className="sidebar-navigation" aria-label="Navegación principal">
+          {sections
+            .filter((section) => {
+              if (currentRole === "Administrador") return true;
+              return canAccessModule(currentRole, section.id);
+            })
+            .map((section) => {
+              const SectionIcon = section.icon;
+              const isOpen = openSection === section.id;
+            const isAllowed = canAccessModule(currentRole, section.id);
 
             const hasActiveItem = section.items.some(
               (item) =>
@@ -282,10 +334,7 @@ export default function Sidebar({
             );
 
             return (
-              <div
-                className="sidebar-section"
-                key={section.id}
-              >
+              <div className="sidebar-section" key={section.id}>
                 <button
                   type="button"
                   className={[
@@ -297,7 +346,14 @@ export default function Sidebar({
                     .join(" ")}
                   onClick={() => handleSectionClick(section.id)}
                   aria-expanded={!collapsed && isOpen}
-                  title={collapsed ? section.title : undefined}
+                  title={
+                    collapsed
+                      ? `${section.title}${!isAllowed ? " (Restringido)" : ""}`
+                      : undefined
+                  }
+                  style={{
+                    opacity: isAllowed ? 1 : 0.65,
+                  }}
                 >
                   <SectionIcon
                     className="sidebar-section-icon"
@@ -310,6 +366,19 @@ export default function Sidebar({
                       <span className="sidebar-section-label">
                         {section.title}
                       </span>
+
+                      {!isAllowed && (
+                        <span
+                          title="Módulo con acceso restringido para tu rol"
+                          style={{
+                            marginRight: "4px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Lock size={12} style={{ color: "#94a3b8" }} />
+                        </span>
+                      )}
 
                       <ChevronDown
                         size={15}
@@ -338,9 +407,7 @@ export default function Sidebar({
                           className={({ isActive }) =>
                             [
                               "sidebar-submenu-link",
-                              isActive
-                                ? "sidebar-submenu-link-active"
-                                : "",
+                              isActive ? "sidebar-submenu-link-active" : "",
                             ]
                               .filter(Boolean)
                               .join(" ")
@@ -363,15 +430,21 @@ export default function Sidebar({
           })}
         </nav>
 
+        {/* Pie del Sidebar con información de versión y perfil */}
         <div className="sidebar-footer">
-          <div className="sidebar-footer-icon">
-            <ShieldCheck size={20} />
+          <div
+            className="sidebar-footer-icon"
+            style={{ color: roleInfo.color }}
+          >
+            <ShieldCheck size={20} strokeWidth={1.9} />
           </div>
 
           {!collapsed && (
             <div className="sidebar-footer-info">
-              <strong>Sistema SEPMS</strong>
-              <span>Versión 1.0</span>
+              <strong>SEPMS Enterprise v2.0</strong>
+              <span title={roleInfo.persona} style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                {roleInfo.tagline}
+              </span>
             </div>
           )}
         </div>

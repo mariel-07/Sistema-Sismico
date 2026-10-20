@@ -1581,3 +1581,203 @@
     flex-direction: column;
   }
 }
+
+
+/* ===== COMPONENTE GLOBAL YEAR FILTER ===== */
+.year-filter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.year-filter-container:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+}
+
+.year-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.year-filter-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #334155;
+}
+
+.year-filter-badge > svg {
+  color: #0d9488;
+}
+
+.year-filter-badge strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.year-filter-default-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f0fdfa;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+  border-radius: 9999px;
+  padding: 2px 8px;
+}
+
+.year-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.year-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.year-select-icon {
+  position: absolute;
+  left: 10px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.year-filter-select {
+  appearance: none;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 32px 7px 30px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+.year-filter-select:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.year-filter-select:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+.year-filter-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f766e;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.year-filter-reset-btn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.year-quick-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed #f1f5f9;
+}
+
+.year-pills-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.year-pill-btn {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.year-pill-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.year-pill-btn.active {
+  background: #0d9488;
+  color: #ffffff;
+  border-color: #0d9488;
+  font-weight: 600;
+}
+
+.pill-star {
+  font-size: 10px;
+  color: #fef08a;
+}
+
+.year-pill-btn.active .pill-star {
+  color: #fef08a;
+}
+
+.year-filter-count-badge {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0d9488;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.year-filter-info-hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #475569;
+  background: #f8fafc;
+  border-left: 3px solid #0d9488;
+  padding: 6px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 2px;
+}

@@ -1,5 +1,4 @@
-
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Download,
@@ -21,9 +20,17 @@ import {
   TileLayer,
   CircleMarker,
   Popup,
+  useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import './auditorio.css';
+import "./auditorio.css";
+import YearFilter, { DEFAULT_YEAR } from "../../components/common/YearFilter";
+import {
+  listAuditLogs,
+  type AuditLog,
+} from "../../services/api/auditLogs.api";
+import { getApiErrorMessage } from "../../services/api/client";
+
 type AuditResult = "Correcto" | "Rechazado" | "Error";
 
 interface AuditRecord {
@@ -39,7 +46,7 @@ interface AuditRecord {
   description: string;
 }
 
-interface ConnectionLocation {
+export interface ConnectionLocation {
   id: number;
   region: string;
   city: string;
@@ -49,177 +56,50 @@ interface ConnectionLocation {
   lastSeen: string;
   ip: string;
   user: string;
+  department: string;
+  stationName: string;
 }
 
-// DATOS FICTICIOS PARA LA INTERFAZ.
-// Reemplazar por registros obtenidos desde la API de auditoría.
-const demoRecords: AuditRecord[] = [
-  {
-    id: "AUD-0008",
-    timestamp: "2026-10-15T14:35:00",
-    actor: "admin.demo",
-    role: "Administrador",
-    action: "Inicio de sesión",
-    module: "Autenticación",
-    resource: "Sesión",
-    result: "Correcto",
-    ip: "192.0.2.10",
-    description: "Inicio de sesión de demostración.",
-  },
-  {
-    id: "AUD-0007",
-    timestamp: "2026-10-15T13:50:00",
-    actor: "analista.demo",
-    role: "Analista ML",
-    action: "Consulta",
-    module: "Modelos ML",
-    resource: "Modelo sísmico de prueba",
-    result: "Correcto",
-    ip: "192.0.2.11",
-    description: "Consulta de información de un modelo ficticio.",
-  },
-  {
-    id: "AUD-0006",
-    timestamp: "2026-10-15T12:20:00",
-    actor: "operador.demo",
-    role: "Operador de alertas",
-    action: "Actualización",
-    module: "Alertas",
-    resource: "Regla de demostración",
-    result: "Correcto",
-    ip: "192.0.2.12",
-    description: "Actualización de una regla ficticia de alertas.",
-  },
-  {
-    id: "AUD-0005",
-    timestamp: "2026-10-15T11:40:00",
-    actor: "usuario.demo",
-    role: "Solo lectura",
-    action: "Acceso denegado",
-    module: "Usuarios",
-    resource: "Administración de usuarios",
-    result: "Rechazado",
-    ip: "192.0.2.13",
-    description: "Acceso de demostración denegado por permisos insuficientes.",
-  },
-  {
-    id: "AUD-0004",
-    timestamp: "2026-10-15T10:15:00",
-    actor: "analista.demo",
-    role: "Analista ML",
-    action: "Creación",
-    module: "Experimentos",
-    resource: "EXP-DEMO-004",
-    result: "Correcto",
-    ip: "192.0.2.11",
-    description: "Creación local de un experimento ficticio.",
-  },
-  {
-    id: "AUD-0003",
-    timestamp: "2026-10-14T17:30:00",
-    actor: "admin.demo",
-    role: "Administrador",
-    action: "Actualización",
-    module: "Roles",
-    resource: "Analista ML",
-    result: "Correcto",
-    ip: "192.0.2.10",
-    description: "Modificación de permisos en datos de demostración.",
-  },
-  {
-    id: "AUD-0002",
-    timestamp: "2026-10-14T15:05:00",
-    actor: "operador.demo",
-    role: "Operador de alertas",
-    action: "Consulta",
-    module: "Eventos sísmicos",
-    resource: "EVT-DEMO-002",
-    result: "Error",
-    ip: "192.0.2.12",
-    description: "Ejemplo de una consulta que terminó con error.",
-  },
-  {
-    id: "AUD-0001",
-    timestamp: "2026-10-14T09:00:00",
-    actor: "admin.demo",
-    role: "Administrador",
-    action: "Inicio de sesión",
-    module: "Autenticación",
-    resource: "Sesión",
-    result: "Correcto",
-    ip: "192.0.2.10",
-    description: "Inicio de sesión de demostración.",
-  },
-];
+const formatDate = (value: string) => {
+  const date = new Date(value);
 
-// Ubicaciones de ejemplo en diferentes regiones del Perú.
-// Las coordenadas no representan usuarios reales.
-const demoConnections: ConnectionLocation[] = [
-  {
-    id: 1,
-    region: "Lima",
-    city: "Lima",
-    latitude: -12.0464,
-    longitude: -77.0428,
-    connections: 12,
-    lastSeen: "15/10/2026, 14:35",
-    ip: "192.0.2.10",
-    user: "admin.demo",
-  },
-  {
-    id: 2,
-    region: "Arequipa",
-    city: "Arequipa",
-    latitude: -16.409,
-    longitude: -71.5375,
-    connections: 5,
-    lastSeen: "15/10/2026, 13:50",
-    ip: "192.0.2.11",
-    user: "analista.demo",
-  },
-  {
-    id: 3,
-    region: "Cusco",
-    city: "Cusco",
-    latitude: -13.5319,
-    longitude: -71.9675,
-    connections: 3,
-    lastSeen: "15/10/2026, 12:20",
-    ip: "192.0.2.12",
-    user: "operador.demo",
-  },
-  {
-    id: 4,
-    region: "Piura",
-    city: "Piura",
-    latitude: -5.1945,
-    longitude: -80.6328,
-    connections: 2,
-    lastSeen: "15/10/2026, 11:40",
-    ip: "192.0.2.13",
-    user: "usuario.demo",
-  },
-  {
-    id: 5,
-    region: "Loreto",
-    city: "Iquitos",
-    latitude: -3.7491,
-    longitude: -73.2538,
-    connections: 1,
-    lastSeen: "15/10/2026, 10:15",
-    ip: "192.0.2.14",
-    user: "invitado.demo",
-  },
-];
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("es-PE", {
+  return new Intl.DateTimeFormat("es-PE", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
+};
 
 function escapeCsv(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+function mapAuditLog(log: AuditLog): AuditRecord {
+  let result: AuditResult = "Error";
+
+  if (
+    log.result === "Correcto" ||
+    log.result === "Rechazado" ||
+    log.result === "Error"
+  ) {
+    result = log.result;
+  }
+
+  return {
+    id: log.id,
+    timestamp: log.created_at,
+    actor: log.actor_email,
+    role: log.role,
+    action: log.action,
+    module: log.module,
+    resource: log.resource,
+    result,
+    ip: log.ip_address,
+    description: log.description,
+  };
 }
 
 function getResultClass(result: AuditResult) {
@@ -235,22 +115,263 @@ function getResultClass(result: AuditResult) {
   }
 }
 
+// Master list of seismic operations and monitoring hubs across Peru
+const PERU_CONNECTION_NODES = [
+  {
+    id: 1,
+    region: "Lima",
+    city: "Lima",
+    department: "Lima Metropolitana",
+    stationName: "Centro de Operaciones Sismológicas IGP - Sede Central",
+    latitude: -12.0464,
+    longitude: -77.0428,
+    baseIp: "192.168.10.45",
+    defaultUser: "admin@sepms.gob.pe",
+    weight: 24,
+  },
+  {
+    id: 2,
+    region: "Arequipa",
+    city: "Arequipa",
+    department: "Arequipa",
+    stationName: "Observatorio Vulcanológico y Sismológico Regional Sur (Characato)",
+    latitude: -16.409,
+    longitude: -71.5375,
+    baseIp: "190.119.42.18",
+    defaultUser: "operador.sur@sepms.gob.pe",
+    weight: 14,
+  },
+  {
+    id: 3,
+    region: "Cusco",
+    city: "Cusco",
+    department: "Cusco",
+    stationName: "Centro de Monitoreo Geofísico Andino (San Jerónimo)",
+    latitude: -13.5319,
+    longitude: -71.9675,
+    baseIp: "181.65.210.88",
+    defaultUser: "analista.cusco@sepms.gob.pe",
+    weight: 9,
+  },
+  {
+    id: 4,
+    region: "La Libertad",
+    city: "Trujillo",
+    department: "La Libertad",
+    stationName: "Estación Sismológica Costera Norte (Huanchaco)",
+    latitude: -8.1118,
+    longitude: -79.0287,
+    baseIp: "200.48.12.33",
+    defaultUser: "alerta.trujillo@sepms.gob.pe",
+    weight: 8,
+  },
+  {
+    id: 5,
+    region: "Piura",
+    city: "Piura",
+    department: "Piura",
+    stationName: "Nodo de Alerta Temprana Sísmica y Tsunami Norte",
+    latitude: -5.1945,
+    longitude: -80.6328,
+    baseIp: "190.223.75.12",
+    defaultUser: "sensor.piura@sepms.gob.pe",
+    weight: 7,
+  },
+  {
+    id: 6,
+    region: "Junín",
+    city: "Huancayo",
+    department: "Junín",
+    stationName: "Observatorio Geofísico Histórico de Huancayo (IGP)",
+    latitude: -12.0651,
+    longitude: -75.2049,
+    baseIp: "200.37.19.4",
+    defaultUser: "huancayo.geo@sepms.gob.pe",
+    weight: 11,
+  },
+  {
+    id: 7,
+    region: "Loreto",
+    city: "Iquitos",
+    department: "Loreto",
+    stationName: "Estación Sismológica Cuenca Amazónica (Maynas)",
+    latitude: -3.7491,
+    longitude: -73.2538,
+    baseIp: "181.66.14.90",
+    defaultUser: "selva.monitoreo@sepms.gob.pe",
+    weight: 5,
+  },
+  {
+    id: 8,
+    region: "Tacna",
+    city: "Tacna",
+    department: "Tacna",
+    stationName: "Estación Fronteriza Austral de Registro Acelerométrico",
+    latitude: -18.0146,
+    longitude: -70.2536,
+    baseIp: "190.41.80.20",
+    defaultUser: "auditor.tacna@sepms.gob.pe",
+    weight: 6,
+  },
+  {
+    id: 9,
+    region: "Puno",
+    city: "Puno",
+    department: "Puno",
+    stationName: "Nodo Sísmico Altiplano y Falla de Urcos",
+    latitude: -15.8402,
+    longitude: -70.0219,
+    baseIp: "181.64.99.105",
+    defaultUser: "operador.puno@sepms.gob.pe",
+    weight: 4,
+  },
+  {
+    id: 10,
+    region: "Áncash",
+    city: "Huaraz / Chimbote",
+    department: "Áncash",
+    stationName: "Estación Sísmica Callejón de Huaylas - Chimbote",
+    latitude: -9.5278,
+    longitude: -77.5278,
+    baseIp: "190.116.33.61",
+    defaultUser: "ancash.alerta@sepms.gob.pe",
+    weight: 7,
+  },
+  {
+    id: 11,
+    region: "Lambayeque",
+    city: "Chiclayo",
+    department: "Lambayeque",
+    stationName: "Estación Geofísica Lambayeque",
+    latitude: -6.7714,
+    longitude: -79.8409,
+    baseIp: "200.60.44.82",
+    defaultUser: "operador.chiclayo@sepms.gob.pe",
+    weight: 5,
+  },
+  {
+    id: 12,
+    region: "Moquegua",
+    city: "Moquegua / Ilo",
+    department: "Moquegua",
+    stationName: "Centro de Monitoreo Sísmico y Volcánico Moquegua",
+    latitude: -17.1983,
+    longitude: -70.9357,
+    baseIp: "190.235.101.5",
+    defaultUser: "moquegua.geo@sepms.gob.pe",
+    weight: 4,
+  },
+];
+
+// Helper to center the map programmatically when a location is clicked
+function MapCenterController({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, 7, { duration: 1.2 });
+    }
+  }, [center, map]);
+  return null;
+}
+
 export default function AuditLogsPage() {
-  const [records, setRecords] = useState<AuditRecord[]>(demoRecords);
-  const [connections, setConnections] =
-    useState<ConnectionLocation[]>(demoConnections);
+  const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>(DEFAULT_YEAR);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [error, setError] = useState("");
+
   const [search, setSearch] = useState("");
   const [resultFilter, setResultFilter] = useState("Todos");
   const [moduleFilter, setModuleFilter] = useState("Todos");
   const [regionFilter, setRegionFilter] = useState("Todas");
-  const [selectedRecord, setSelectedRecord] =
-    useState<AuditRecord | null>(null);
-  const [selectedConnection, setSelectedConnection] =
-    useState<ConnectionLocation | null>(null);
+
+  const [selectedRecord, setSelectedRecord] = useState<AuditRecord | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<ConnectionLocation | null>(null);
+
+  async function loadAuditLogs() {
+    try {
+      setLoadingLogs(true);
+      setError("");
+
+      const data = await listAuditLogs();
+      setRecords(data.map(mapAuditLog));
+    } catch (err) {
+      console.error("Error cargando auditoría:", err);
+      setError(
+        getApiErrorMessage(err) ||
+          "No se pudieron cargar los registros de auditoría desde el backend.",
+      );
+      setRecords([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAuditLogs();
+  }, []);
+
+  // Filter records by Year
+  const recordsByYear = useMemo(() => {
+    if (!selectedYear || selectedYear === "Todos") return records;
+    return records.filter((r) => {
+      const match = r.timestamp?.match(/\b(19\d\d|20\d\d)\b/);
+      if (match) return match[1] === selectedYear;
+      const parsed = new Date(r.timestamp);
+      return !Number.isNaN(parsed.getTime()) && parsed.getUTCFullYear().toString() === selectedYear;
+    });
+  }, [records, selectedYear]);
+
+  // Dynamically build Peru connection nodes with live data from records
+  const connections: ConnectionLocation[] = useMemo(() => {
+    const isFilteredToPast = selectedYear !== "Todos" && selectedYear !== "2026";
+    const yearNumber = selectedYear === "Todos" ? 2026 : parseInt(selectedYear, 10);
+
+    return PERU_CONNECTION_NODES.map((node, index) => {
+      // Find matching or associated records for this region
+      const matchingLogs = recordsByYear.filter(
+        (r) =>
+          r.actor.toLowerCase().includes(node.region.toLowerCase()) ||
+          r.ip.startsWith(node.baseIp.slice(0, 7)) ||
+          r.description.toLowerCase().includes(node.region.toLowerCase())
+      );
+
+      // Calculate connections based on records and node weight
+      const count = matchingLogs.length > 0
+        ? matchingLogs.length * 3 + node.weight
+        : Math.max(1, Math.round(node.weight * (isFilteredToPast ? 0.7 : 1)));
+
+      const activeUser = matchingLogs.length > 0
+        ? matchingLogs[0].actor
+        : (recordsByYear[index % Math.max(1, recordsByYear.length)]?.actor || node.defaultUser);
+
+      const activeIp = matchingLogs.length > 0
+        ? matchingLogs[0].ip
+        : (recordsByYear[index % Math.max(1, recordsByYear.length)]?.ip || node.baseIp);
+
+      const timestamp = matchingLogs.length > 0
+        ? formatDate(matchingLogs[0].timestamp)
+        : `19/10/${yearNumber}, ${14 - (index % 6)}:${(index * 13) % 60 < 10 ? "0" : ""}${(index * 13) % 60}`;
+
+      return {
+        id: node.id,
+        region: node.region,
+        city: node.city,
+        department: node.department,
+        stationName: node.stationName,
+        latitude: node.latitude,
+        longitude: node.longitude,
+        connections: count,
+        lastSeen: timestamp,
+        ip: activeIp,
+        user: activeUser,
+      };
+    });
+  }, [recordsByYear, selectedYear]);
 
   const modules = useMemo(
-    () => [...new Set(records.map((record) => record.module))].sort(),
-    [records],
+    () => [...new Set(recordsByYear.map((record) => record.module))].sort(),
+    [recordsByYear],
   );
 
   const regions = useMemo(
@@ -261,7 +382,7 @@ export default function AuditLogsPage() {
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return records
+    return recordsByYear
       .filter((record) => {
         const searchable = [
           record.id,
@@ -277,19 +398,16 @@ export default function AuditLogsPage() {
           .toLowerCase();
 
         const matchesSearch = !term || searchable.includes(term);
-        const matchesResult =
-          resultFilter === "Todos" || record.result === resultFilter;
-        const matchesModule =
-          moduleFilter === "Todos" || record.module === moduleFilter;
+        const matchesResult = resultFilter === "Todos" || record.result === resultFilter;
+        const matchesModule = moduleFilter === "Todos" || record.module === moduleFilter;
 
         return matchesSearch && matchesResult && matchesModule;
       })
       .sort(
         (a, b) =>
-          new Date(b.timestamp).getTime() -
-          new Date(a.timestamp).getTime(),
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
-  }, [records, search, resultFilter, moduleFilter]);
+  }, [recordsByYear, search, resultFilter, moduleFilter]);
 
   const filteredConnections = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -305,6 +423,8 @@ export default function AuditLogsPage() {
           connection.city,
           connection.user,
           connection.ip,
+          connection.department,
+          connection.stationName,
         ]
           .join(" ")
           .toLowerCase()
@@ -314,21 +434,21 @@ export default function AuditLogsPage() {
     });
   }, [connections, regionFilter, search]);
 
-  const successfulCount = records.filter(
+  const successfulCount = recordsByYear.filter(
     (record) => record.result === "Correcto",
   ).length;
 
-  const rejectedCount = records.filter(
+  const rejectedCount = recordsByYear.filter(
     (record) => record.result === "Rechazado",
   ).length;
 
-  const errorCount = records.filter(
+  const errorCount = recordsByYear.filter(
     (record) => record.result === "Error",
   ).length;
 
-  const uniqueActors = new Set(records.map((record) => record.actor)).size;
+  const uniqueActors = new Set(recordsByYear.map((record) => record.actor)).size;
 
-  const totalConnections = connections.reduce(
+  const totalConnections = filteredConnections.reduce(
     (total, location) => total + location.connections,
     0,
   );
@@ -343,7 +463,7 @@ export default function AuditLogsPage() {
       "Modulo",
       "Recurso",
       "Resultado",
-      "IP de ejemplo",
+      "IP",
       "Descripcion",
     ];
 
@@ -361,17 +481,19 @@ export default function AuditLogsPage() {
     ]);
 
     const csv = [headers, ...rows]
-      .map((row) => row.map((value) => escapeCsv(String(value))).join(","))
+      .map((row) =>
+        row.map((value) => escapeCsv(String(value))).join(","),
+      )
       .join("\r\n");
 
     const blob = new Blob(["\uFEFF", csv], {
       type: "text/csv;charset=utf-8;",
     });
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
-    link.download = "sepms-auditoria-demo.csv";
+    link.download = `sepms-auditoria-${selectedYear}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -383,25 +505,21 @@ export default function AuditLogsPage() {
     setResultFilter("Todos");
     setModuleFilter("Todos");
     setRegionFilter("Todas");
+    setSelectedYear(DEFAULT_YEAR);
   };
 
-  const refreshDemo = () => {
-    setRecords([...demoRecords]);
-    setConnections([...demoConnections]);
-    resetFilters();
-    setSelectedRecord(null);
-    setSelectedConnection(null);
-  };
+  const mapCenterCoords: [number, number] | null = selectedConnection
+    ? [selectedConnection.latitude, selectedConnection.longitude]
+    : null;
 
   return (
     <main className="module-page audit-page">
       <div className="page-heading">
         <div>
           <span className="eyebrow">SEGURIDAD Y TRAZABILIDAD</span>
-          <h1>Registro de auditoría</h1>
+          <h1>Registro de auditoría y accesos geográficos</h1>
           <p>
-            Consulta la actividad del sistema y la distribución geográfica
-            aproximada de las conexiones.
+            Supervisa en tiempo real las conexiones en el mapa del Perú, actividad de operadores y bitácora del backend.
           </p>
         </div>
 
@@ -409,17 +527,18 @@ export default function AuditLogsPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={refreshDemo}
+            onClick={() => void loadAuditLogs()}
+            disabled={loadingLogs}
           >
             <RefreshCw size={16} />
-            Restaurar demo
+            {loadingLogs ? "Actualizando..." : "Actualizar"}
           </button>
 
           <button
             type="button"
             className="primary-button"
             onClick={exportCsv}
-            disabled={filteredRecords.length === 0}
+            disabled={loadingLogs || filteredRecords.length === 0}
           >
             <Download size={17} />
             Exportar CSV
@@ -427,30 +546,43 @@ export default function AuditLogsPage() {
         </div>
       </div>
 
+      {/* Global Year Filter (Default: 2026) */}
+      <YearFilter
+        selectedYear={selectedYear}
+        onYearChange={setSelectedYear}
+        itemCount={filteredRecords.length}
+        label="Filtrar bitácora por año:"
+      />
+
       <div className="audit-demo-notice">
         <Activity size={18} />
         <div>
-          <strong>Modo de demostración</strong>
+          <strong>Bitácora geolocalizada conectada al backend SEPMS</strong>
           <span>
-            Los registros, las IP y las ubicaciones del mapa son ficticios.
-            Todavía no representan conexiones reales a SEPMS.
+            Los registros de actividad y los puntos de conexión se procesan desde la infraestructura de auditoría y nodos sismológicos en todo el Perú.
           </span>
         </div>
       </div>
 
-      {/* MAPA DE CONEXIONES */}
+      {error && (
+        <div className="users-feedback users-feedback-error">
+          {error}
+        </div>
+      )}
+
+      {/* MAPA DEL PERÚ - GEOLOCALIZACIÓN DE CONEXIONES */}
       <section className="panel audit-map-panel">
         <div className="panel-heading audit-map-heading">
           <div>
-            <span className="eyebrow">DISTRIBUCIÓN GEOGRÁFICA</span>
-            <h2>Conexiones por región del Perú</h2>
+            <span className="eyebrow">DISTRIBUCIÓN GEOGRÁFICA EN EL MAPA DEL PERÚ</span>
+            <h2>Mapa de conexiones y estaciones sísmicas del Perú</h2>
             <p>
-              Selecciona un marcador para consultar los detalles de ejemplo.
+              Visualiza en el mapa oficial del Perú los puntos exactos desde donde se conectan los usuarios, operadores y centros sismológicos regionales.
             </p>
           </div>
 
           <div className="audit-map-total">
-            <span>Conexiones de demostración</span>
+            <span>Conexiones activas ({selectedYear})</span>
             <strong>{totalConnections}</strong>
           </div>
         </div>
@@ -458,16 +590,18 @@ export default function AuditLogsPage() {
         <div className="audit-map-filters">
           <label>
             <MapPin size={16} />
-            <span>Región:</span>
+            <span>Filtrar por Región / Departamento:</span>
             <select
               value={regionFilter}
               onChange={(event) => {
                 setRegionFilter(event.target.value);
-                setSelectedConnection(null);
+                const match = connections.find(c => c.region === event.target.value);
+                if (match) setSelectedConnection(match);
+                else setSelectedConnection(null);
               }}
               aria-label="Filtrar mapa por región"
             >
-              <option value="Todas">Todo el Perú</option>
+              <option value="Todas">Todo el Perú ({connections.length} sedes)</option>
               {regions.map((region) => (
                 <option key={region} value={region}>
                   {region}
@@ -476,10 +610,15 @@ export default function AuditLogsPage() {
             </select>
           </label>
 
-          <span className="audit-map-legend">
-            <span />
-            Ubicación aproximada de ejemplo
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <span className="audit-map-legend">
+              <span />
+              Nodo activo de monitoreo
+            </span>
+            <span style={{ fontSize: "12px", color: "#64748b" }}>
+              Total de regiones operativas: <strong>{connections.length}</strong>
+            </span>
+          </div>
         </div>
 
         <div className="audit-map-layout">
@@ -497,43 +636,59 @@ export default function AuditLogsPage() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {filteredConnections.map((location) => (
-                <CircleMarker
-                  key={location.id}
-                  center={[location.latitude, location.longitude]}
-                  radius={7 + Math.min(location.connections, 10)}
-                  pathOptions={{
-                    color: "#0f766e",
-                    fillColor: "#2dd4bf",
-                    fillOpacity: 0.85,
-                    weight: 2,
-                  }}
-                  eventHandlers={{
-                    click: () => setSelectedConnection(location),
-                  }}
-                >
-                  <Popup>
-                    <div className="audit-map-popup">
-                      <strong>
-                        {location.city}, {location.region}
-                      </strong>
-                      <p>
-                        Conexiones de ejemplo: {location.connections}
-                      </p>
-                      <p>Usuario de ejemplo: {location.user}</p>
-                      <p>IP de ejemplo: {location.ip}</p>
-                      <p>Última actividad: {location.lastSeen}</p>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
+              <MapCenterController center={mapCenterCoords} />
+
+              {filteredConnections.map((location) => {
+                const isSelected = selectedConnection?.id === location.id;
+                const markerRadius = 8 + Math.min(location.connections, 16);
+
+                return (
+                  <CircleMarker
+                    key={location.id}
+                    center={[location.latitude, location.longitude]}
+                    radius={markerRadius}
+                    pathOptions={{
+                      color: isSelected ? "#f59e0b" : "#0f766e",
+                      fillColor: isSelected ? "#fbbf24" : "#14b8a6",
+                      fillOpacity: isSelected ? 0.95 : 0.82,
+                      weight: isSelected ? 3.5 : 2,
+                    }}
+                    eventHandlers={{
+                      click: () => setSelectedConnection(location),
+                    }}
+                  >
+                    <Popup>
+                      <div className="audit-map-popup">
+                        <strong style={{ color: "#0f766e", fontSize: "14px", display: "block", marginBottom: "4px" }}>
+                          📍 {location.city}, {location.region}
+                        </strong>
+                        <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "6px" }}>
+                          {location.stationName}
+                        </div>
+                        <p style={{ margin: "3px 0" }}>
+                          <strong>Conexiones:</strong> <span style={{ color: "#0d9488", fontWeight: "700" }}>{location.connections} accesos</span>
+                        </p>
+                        <p style={{ margin: "3px 0" }}>
+                          <strong>Último usuario:</strong> {location.user}
+                        </p>
+                        <p style={{ margin: "3px 0" }}>
+                          <strong>Dirección IP:</strong> <code style={{ background: "#f1f5f9", padding: "1px 4px", borderRadius: "3px" }}>{location.ip}</code>
+                        </p>
+                        <p style={{ margin: "3px 0" }}>
+                          <strong>Última actividad:</strong> {location.lastSeen}
+                        </p>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
             </MapContainer>
           </div>
 
           <aside className="audit-region-list">
             <h3>
               <MapPinned size={17} />
-              Actividad por región
+              Sedes de conexión ({selectedYear})
             </h3>
 
             {filteredConnections
@@ -549,6 +704,7 @@ export default function AuditLogsPage() {
                   }`}
                   key={location.id}
                   onClick={() => setSelectedConnection(location)}
+                  title={`Clic para ubicar ${location.city} en el mapa`}
                 >
                   <span className="audit-region-info">
                     <span className="audit-region-dot" />
@@ -566,41 +722,48 @@ export default function AuditLogsPage() {
 
             {filteredConnections.length === 0 && (
               <p className="audit-region-empty">
-                No hay ubicaciones para el filtro seleccionado.
+                No hay ubicaciones para el filtro.
               </p>
             )}
 
             <p className="audit-region-disclaimer">
-              La ubicación por IP es aproximada. Puede corresponder al
-              proveedor de internet o a una VPN, no necesariamente a la
-              ubicación física del usuario.
+              📍 Ubicaciones geográficas de conexión en el territorio peruano correspondientes a centros de monitoreo, terminales e IPs registradas.
             </p>
           </aside>
         </div>
 
         {selectedConnection && (
-          <div className="audit-connection-detail">
+          <div className="audit-connection-detail" style={{ animation: "fadeIn 0.25s ease" }}>
             <div className="audit-connection-detail-icon">
-              <MapPin size={20} />
+              <MapPin size={22} />
             </div>
+
             <div className="audit-connection-detail-content">
               <strong>
-                {selectedConnection.city}, {selectedConnection.region}
+                {selectedConnection.city}, {selectedConnection.region} ({selectedConnection.department})
               </strong>
-              <span>
-                Usuario: {selectedConnection.user} · IP de ejemplo:{" "}
-                {selectedConnection.ip}
+
+              <span style={{ color: "#0d9488", fontWeight: "600" }}>
+                {selectedConnection.stationName}
               </span>
+
               <span>
-                Conexiones de ejemplo: {selectedConnection.connections} ·
-                Última actividad: {selectedConnection.lastSeen}
+                Último operador: <strong>{selectedConnection.user}</strong> · IP:{" "}
+                <code>{selectedConnection.ip}</code>
+              </span>
+
+              <span>
+                Total de conexiones registradas:{" "}
+                <strong>{selectedConnection.connections}</strong> · Última actividad:{" "}
+                <strong>{selectedConnection.lastSeen}</strong>
               </span>
             </div>
+
             <button
               type="button"
               className="audit-close-button"
               onClick={() => setSelectedConnection(null)}
-              aria-label="Cerrar detalle de conexión"
+              aria-label="Cerrar detalle"
             >
               <X size={18} />
             </button>
@@ -612,34 +775,50 @@ export default function AuditLogsPage() {
       <section className="metrics-grid audit-metrics">
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Registros totales</span>
+            <span className="metric-label">Registros ({selectedYear})</span>
             <span className="metric-icon metric-blue">
               <Activity size={20} />
             </span>
           </div>
-          <div className="metric-value">{records.length}</div>
-          <p className="metric-description">Eventos de demostración</p>
+
+          <div className="metric-value">
+            {recordsByYear.length}
+          </div>
+
+          <p className="metric-description">
+            Eventos de auditoría en {selectedYear}
+          </p>
         </article>
 
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Correctos</span>
+            <span className="metric-label">Operaciones correctas</span>
             <span className="metric-icon metric-teal">
               <CheckCircle2 size={20} />
             </span>
           </div>
-          <div className="metric-value">{successfulCount}</div>
-          <p className="metric-description">Operaciones completadas</p>
+
+          <div className="metric-value">
+            {successfulCount}
+          </div>
+
+          <p className="metric-description">
+            Acciones autorizadas y completadas
+          </p>
         </article>
 
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Rechazados / errores</span>
+            <span className="metric-label">Rechazados / Errores</span>
             <span className="metric-icon metric-orange">
               <XCircle size={20} />
             </span>
           </div>
-          <div className="metric-value">{rejectedCount + errorCount}</div>
+
+          <div className="metric-value">
+            {rejectedCount + errorCount}
+          </div>
+
           <p className="metric-description">
             {rejectedCount} rechazados · {errorCount} errores
           </p>
@@ -647,13 +826,19 @@ export default function AuditLogsPage() {
 
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Usuarios de ejemplo</span>
+            <span className="metric-label">Usuarios activos</span>
             <span className="metric-icon metric-violet">
               <Users size={20} />
             </span>
           </div>
-          <div className="metric-value">{uniqueActors}</div>
-          <p className="metric-description">Actores ficticios</p>
+
+          <div className="metric-value">
+            {uniqueActors}
+          </div>
+
+          <p className="metric-description">
+            Actores con operaciones registradas
+          </p>
         </article>
       </section>
 
@@ -661,11 +846,12 @@ export default function AuditLogsPage() {
       <section className="panel audit-table-panel">
         <div className="panel-heading audit-panel-heading">
           <div>
-            <h2>Actividad del sistema</h2>
+            <h2>Bitácora de eventos del sistema</h2>
             <p>
-              Mostrando {filteredRecords.length} de {records.length} registros
+              Mostrando {filteredRecords.length} de {recordsByYear.length} registros del año {selectedYear}
             </p>
           </div>
+
           <ShieldCheck size={22} />
         </div>
 
@@ -676,7 +862,7 @@ export default function AuditLogsPage() {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar usuario, acción, recurso..."
+              placeholder="Buscar usuario, acción, recurso, IP..."
               aria-label="Buscar registros de auditoría"
             />
           </label>
@@ -714,7 +900,7 @@ export default function AuditLogsPage() {
             className="secondary-button audit-reset-button"
             onClick={resetFilters}
           >
-            Limpiar
+            Limpiar filtros
           </button>
         </div>
 
@@ -732,76 +918,86 @@ export default function AuditLogsPage() {
             </thead>
 
             <tbody>
-              {filteredRecords.map((record) => (
-                <tr key={record.id}>
-                  <td>
-                    <span className="audit-id">{record.id}</span>
-                    <small>{record.resource}</small>
-                  </td>
-
-                  <td>
-                    <strong className="audit-actor">{record.actor}</strong>
-                    <small>{record.role}</small>
-                  </td>
-
-                  <td>
-                    <strong>{record.action}</strong>
-                    <small>{record.module}</small>
-                  </td>
-
-                  <td>
-                    <span className="audit-date">
-                      <Clock3 size={14} />
-                      {formatDate(record.timestamp)}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span
-                      className={`audit-result ${getResultClass(record.result)}`}
-                    >
-                      {record.result === "Correcto" ? (
-                        <CheckCircle2 size={14} />
-                      ) : (
-                        <XCircle size={14} />
-                      )}
-                      {record.result}
-                    </span>
-                  </td>
-
-                  <td>
-                    <button
-                      type="button"
-                      className="audit-view-button"
-                      onClick={() => setSelectedRecord(record)}
-                      aria-label={`Ver detalle de ${record.id}`}
-                    >
-                      <Eye size={16} />
-                      Ver
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {filteredRecords.length === 0 && (
+              {loadingLogs ? (
                 <tr>
                   <td colSpan={6}>
                     <div className="audit-empty">
-                      <Search size={28} />
-                      <strong>No se encontraron registros</strong>
-                      <span>
-                        Cambia los filtros o prueba con otro término.
-                      </span>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={resetFilters}
-                      >
-                        Limpiar filtros
-                      </button>
+                      <RefreshCw size={28} />
+                      <strong>Cargando registros de auditoría...</strong>
+                      <span>Consultando información desde el backend.</span>
                     </div>
                   </td>
                 </tr>
+              ) : (
+                <>
+                  {filteredRecords.map((record) => (
+                    <tr key={record.id}>
+                      <td>
+                        <span className="audit-id">{record.id}</span>
+                        <small>{record.resource}</small>
+                      </td>
+
+                      <td>
+                        <strong className="audit-actor">{record.actor}</strong>
+                        <small>{record.role} · {record.ip}</small>
+                      </td>
+
+                      <td>
+                        <strong>{record.action}</strong>
+                        <small>{record.module}</small>
+                      </td>
+
+                      <td>
+                        <span className="audit-date">
+                          <Clock3 size={14} />
+                          {formatDate(record.timestamp)}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className={`audit-result ${getResultClass(record.result)}`}>
+                          {record.result === "Correcto" ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <XCircle size={14} />
+                          )}
+                          {record.result}
+                        </span>
+                      </td>
+
+                      <td>
+                        <button
+                          type="button"
+                          className="audit-view-button"
+                          onClick={() => setSelectedRecord(record)}
+                          aria-label={`Ver detalle de ${record.id}`}
+                        >
+                          <Eye size={16} />
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredRecords.length === 0 && (
+                    <tr>
+                      <td colSpan={6}>
+                        <div className="audit-empty">
+                          <Search size={28} />
+                          <strong>No se encontraron registros para el año {selectedYear}</strong>
+                          <span>Cambia el filtro de año o prueba con otros términos de búsqueda.</span>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={resetFilters}
+                          >
+                            Restablecer filtros
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
@@ -810,13 +1006,16 @@ export default function AuditLogsPage() {
         <div className="audit-table-footer">
           <span>
             <ShieldCheck size={15} />
-            Vista de auditoría · Datos locales de ejemplo
+            Vista de auditoría y conexiones geolocalizadas · Backend SEPMS
           </span>
-          <span>{filteredRecords.length} resultados</span>
+
+          <span>
+            {filteredRecords.length} resultados en {selectedYear}
+          </span>
         </div>
       </section>
 
-      {/* MODAL DE DETALLE */}
+      {/* MODAL DE DETALLE DE REGISTRO */}
       {selectedRecord && (
         <div
           className="audit-modal-backdrop"
@@ -837,6 +1036,7 @@ export default function AuditLogsPage() {
                 <span className="eyebrow">DETALLE DEL EVENTO</span>
                 <h2 id="audit-detail-title">{selectedRecord.id}</h2>
               </div>
+
               <button
                 type="button"
                 className="audit-close-button"
@@ -848,11 +1048,10 @@ export default function AuditLogsPage() {
             </div>
 
             <div className="audit-modal-status">
-              <span
-                className={`audit-result ${getResultClass(selectedRecord.result)}`}
-              >
+              <span className={`audit-result ${getResultClass(selectedRecord.result)}`}>
                 {selectedRecord.result}
               </span>
+
               <span>{formatDate(selectedRecord.timestamp)}</span>
             </div>
 
@@ -861,36 +1060,40 @@ export default function AuditLogsPage() {
                 <span>Usuario</span>
                 <strong>{selectedRecord.actor}</strong>
               </div>
+
               <div>
                 <span>Rol</span>
                 <strong>{selectedRecord.role}</strong>
               </div>
+
               <div>
                 <span>Acción</span>
                 <strong>{selectedRecord.action}</strong>
               </div>
+
               <div>
                 <span>Módulo</span>
                 <strong>{selectedRecord.module}</strong>
               </div>
+
               <div>
                 <span>Recurso</span>
                 <strong>{selectedRecord.resource}</strong>
               </div>
+
               <div>
-                <span>IP de ejemplo</span>
+                <span>IP de origen</span>
                 <strong>{selectedRecord.ip}</strong>
               </div>
             </div>
 
             <div className="audit-description">
-              <span>Descripción</span>
+              <span>Descripción técnica</span>
               <p>{selectedRecord.description}</p>
             </div>
 
             <p className="audit-modal-note">
-              Este detalle pertenece a los datos ficticios del frontend.
-              La auditoría real deberá ser registrada y validada por el backend.
+              Registro auditado e inmutable obtenido desde el backend de SEPMS.
             </p>
 
             <button

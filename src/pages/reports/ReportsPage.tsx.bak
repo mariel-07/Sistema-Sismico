@@ -1,0 +1,653 @@
+import { useMemo, useState } from "react";
+import {
+  BarChart3,
+  CalendarDays,
+  Download,
+  FileBarChart,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  RefreshCw,
+  Search,
+  TrendingUp,
+  Activity,
+  MapPin,
+  AlertTriangle,
+} from "lucide-react";
+
+import "./reports.css";
+
+type ReportType =
+  | "events"
+  | "magnitudes"
+  | "locations"
+  | "alerts"
+  | "system";
+
+type ReportFormat = "pdf" | "excel";
+
+interface ReportRecord {
+  id: number;
+  date: string;
+  time: string;
+  latitude: number;
+  longitude: number;
+  depth: number;
+  magnitude: number;
+  location: string;
+  status: "Normal" | "Moderado" | "Fuerte" | "Crítico";
+}
+
+const mockEvents: ReportRecord[] = [
+  {
+    id: 1,
+    date: "1960-01-13",
+    time: "15:40:34",
+    latitude: -16.145,
+    longitude: -72.144,
+    depth: 60,
+    magnitude: 7.5,
+    location: "Arequipa",
+    status: "Crítico",
+  },
+  {
+    id: 2,
+    date: "1960-01-15",
+    time: "09:30:24",
+    latitude: -15,
+    longitude: -75,
+    depth: 70,
+    magnitude: 7.0,
+    location: "Costa sur del Perú",
+    status: "Fuerte",
+  },
+  {
+    id: 3,
+    date: "1960-01-17",
+    time: "02:57:58",
+    latitude: -14.5,
+    longitude: -74.5,
+    depth: 150,
+    magnitude: 6.4,
+    location: "Ayacucho",
+    status: "Fuerte",
+  },
+  {
+    id: 4,
+    date: "1960-01-23",
+    time: "03:37:32",
+    latitude: -12.5,
+    longitude: -68.5,
+    depth: 300,
+    magnitude: 5.8,
+    location: "Zona oriental",
+    status: "Moderado",
+  },
+  {
+    id: 5,
+    date: "1960-01-30",
+    time: "05:07:24",
+    latitude: -5.5,
+    longitude: -77.5,
+    depth: 100,
+    magnitude: 5.7,
+    location: "Amazonas",
+    status: "Moderado",
+  },
+  {
+    id: 6,
+    date: "1960-02-08",
+    time: "19:06:16",
+    latitude: -8.5,
+    longitude: -74.5,
+    depth: 136,
+    magnitude: 5.3,
+    location: "Ucayali",
+    status: "Moderado",
+  },
+  {
+    id: 7,
+    date: "1960-02-13",
+    time: "20:40:06",
+    latitude: -17.5,
+    longitude: -70,
+    depth: 150,
+    magnitude: 5.9,
+    location: "Tacna",
+    status: "Moderado",
+  },
+  {
+    id: 8,
+    date: "1960-03-09",
+    time: "23:54:25",
+    latitude: -16.389,
+    longitude: -73.817,
+    depth: 80,
+    magnitude: 6.2,
+    location: "Arequipa",
+    status: "Fuerte",
+  },
+];
+
+const reportOptions = [
+  {
+    id: "events" as ReportType,
+    title: "Reporte de eventos sísmicos",
+    description:
+      "Listado detallado de eventos registrados en el sistema.",
+    icon: Activity,
+  },
+  {
+    id: "magnitudes" as ReportType,
+    title: "Reporte de magnitudes",
+    description:
+      "Análisis de magnitudes, distribución y eventos destacados.",
+    icon: BarChart3,
+  },
+  {
+    id: "locations" as ReportType,
+    title: "Reporte geográfico",
+    description:
+      "Distribución de eventos según ubicación geográfica.",
+    icon: MapPin,
+  },
+  {
+    id: "alerts" as ReportType,
+    title: "Reporte de alertas",
+    description:
+      "Resumen de alertas generadas y niveles de criticidad.",
+    icon: AlertTriangle,
+  },
+  {
+    id: "system" as ReportType,
+    title: "Reporte del sistema",
+    description:
+      "Estado general, fuentes, registros y actividad del sistema.",
+    icon: FileBarChart,
+  },
+];
+
+export default function ReportsPage() {
+  const [reportType, setReportType] = useState<ReportType>("events");
+  const [format, setFormat] = useState<ReportFormat>("pdf");
+
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [minMagnitude, setMinMagnitude] = useState("");
+  const [maxMagnitude, setMaxMagnitude] = useState("");
+
+  const [generated, setGenerated] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const filteredEvents = useMemo(() => {
+    return mockEvents.filter((event) => {
+      const matchesSearch =
+        !search ||
+        event.location.toLowerCase().includes(search.toLowerCase()) ||
+        event.date.includes(search);
+
+      const matchesMin =
+        !minMagnitude || event.magnitude >= Number(minMagnitude);
+
+      const matchesMax =
+        !maxMagnitude || event.magnitude <= Number(maxMagnitude);
+
+      const matchesStart =
+        !startDate || event.date >= startDate;
+
+      const matchesEnd =
+        !endDate || event.date <= endDate;
+
+      return (
+        matchesSearch &&
+        matchesMin &&
+        matchesMax &&
+        matchesStart &&
+        matchesEnd
+      );
+    });
+  }, [search, minMagnitude, maxMagnitude, startDate, endDate]);
+
+  const statistics = useMemo(() => {
+    const total = filteredEvents.length;
+
+    const average =
+      total > 0
+        ? filteredEvents.reduce(
+            (sum, event) => sum + event.magnitude,
+            0
+          ) / total
+        : 0;
+
+    const maximum =
+      total > 0
+        ? Math.max(...filteredEvents.map((event) => event.magnitude))
+        : 0;
+
+    const minimumDepth =
+      total > 0
+        ? Math.min(...filteredEvents.map((event) => event.depth))
+        : 0;
+
+    return {
+      total,
+      average,
+      maximum,
+      minimumDepth,
+    };
+  }, [filteredEvents]);
+
+  const handleGenerate = () => {
+    setLoading(true);
+
+    setTimeout(() => {
+      setGenerated(true);
+      setLoading(false);
+    }, 700);
+  };
+
+  const handleClear = () => {
+    setStartDate("");
+    setEndDate("");
+    setSearch("");
+    setMinMagnitude("");
+    setMaxMagnitude("");
+    setGenerated(false);
+  };
+
+  const selectedReport = reportOptions.find(
+    (report) => report.id === reportType
+  );
+
+  return (
+    <div className="reports-page">
+      <header className="reports-header">
+        <div>
+          <div className="reports-eyebrow">
+            SEPMS / REPORTES
+          </div>
+
+          <h1>Generación de reportes</h1>
+
+          <p>
+            Consulta, analiza y genera reportes de los eventos
+            sísmicos registrados por el Sistema de Evaluación y
+            Predicción de Movimientos Sísmicos.
+          </p>
+        </div>
+
+        <div className="reports-header-actions">
+          <button
+            type="button"
+            className="reports-secondary-button"
+            onClick={handleClear}
+          >
+            <RefreshCw size={17} />
+            Limpiar
+          </button>
+        </div>
+      </header>
+
+      <section className="report-type-section">
+        <div className="section-title">
+          <FileBarChart size={20} />
+          <div>
+            <h2>Tipo de reporte</h2>
+            <span>
+              Selecciona la información que deseas consultar.
+            </span>
+          </div>
+        </div>
+
+        <div className="report-options">
+          {reportOptions.map((option) => {
+            const Icon = option.icon;
+            const active = reportType === option.id;
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`report-option ${
+                  active ? "active" : ""
+                }`}
+                onClick={() => {
+                  setReportType(option.id);
+                  setGenerated(false);
+                }}
+              >
+                <span className="report-option-icon">
+                  <Icon size={21} />
+                </span>
+
+                <span className="report-option-content">
+                  <strong>{option.title}</strong>
+                  <small>{option.description}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="report-filter-card">
+        <div className="section-title">
+          <Filter size={20} />
+
+          <div>
+            <h2>Parámetros del reporte</h2>
+            <span>
+              Define los criterios para filtrar la información.
+            </span>
+          </div>
+        </div>
+
+        <div className="filter-grid">
+          <div className="form-group">
+            <label htmlFor="startDate">
+              Fecha inicial
+            </label>
+
+            <div className="input-icon">
+              <CalendarDays size={17} />
+
+              <input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(event) =>
+                  setStartDate(event.target.value)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="endDate">
+              Fecha final
+            </label>
+
+            <div className="input-icon">
+              <CalendarDays size={17} />
+
+              <input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(event) =>
+                  setEndDate(event.target.value)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="minMagnitude">
+              Magnitud mínima
+            </label>
+
+            <input
+              id="minMagnitude"
+              type="number"
+              step="0.1"
+              min="0"
+              max="10"
+              placeholder="Ej. 5.0"
+              value={minMagnitude}
+              onChange={(event) =>
+                setMinMagnitude(event.target.value)
+              }
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="maxMagnitude">
+              Magnitud máxima
+            </label>
+
+            <input
+              id="maxMagnitude"
+              type="number"
+              step="0.1"
+              min="0"
+              max="10"
+              placeholder="Ej. 8.0"
+              value={maxMagnitude}
+              onChange={(event) =>
+                setMaxMagnitude(event.target.value)
+              }
+            />
+          </div>
+
+          <div className="form-group form-group-wide">
+            <label htmlFor="search">
+              Ubicación o fecha
+            </label>
+
+            <div className="input-icon">
+              <Search size={17} />
+
+              <input
+                id="search"
+                type="text"
+                placeholder="Buscar por ubicación o fecha..."
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="format-section">
+          <div>
+            <label className="format-label">
+              Formato de salida
+            </label>
+
+            <div className="format-options">
+              <button
+                type="button"
+                className={`format-button ${
+                  format === "pdf" ? "active" : ""
+                }`}
+                onClick={() => setFormat("pdf")}
+              >
+                <FileText size={18} />
+                PDF
+              </button>
+
+              <button
+                type="button"
+                className={`format-button ${
+                  format === "excel" ? "active" : ""
+                }`}
+                onClick={() => setFormat("excel")}
+              >
+                <FileSpreadsheet size={18} />
+                Excel
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="generate-button"
+            onClick={handleGenerate}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <RefreshCw
+                  size={18}
+                  className="spin"
+                />
+                Generando...
+              </>
+            ) : (
+              <>
+                <FileBarChart size={18} />
+                Generar reporte
+              </>
+            )}
+          </button>
+        </div>
+      </section>
+
+      <section className="report-summary">
+        <div className="summary-card">
+          <span className="summary-icon">
+            <Activity size={20} />
+          </span>
+
+          <div>
+            <small>Eventos encontrados</small>
+            <strong>{statistics.total}</strong>
+          </div>
+        </div>
+
+        <div className="summary-card">
+          <span className="summary-icon">
+            <TrendingUp size={20} />
+          </span>
+
+          <div>
+            <small>Magnitud promedio</small>
+            <strong>
+              {statistics.average.toFixed(2)}
+            </strong>
+          </div>
+        </div>
+
+        <div className="summary-card">
+          <span className="summary-icon">
+            <BarChart3 size={20} />
+          </span>
+
+          <div>
+            <small>Mayor magnitud</small>
+            <strong>
+              {statistics.maximum.toFixed(1)}
+            </strong>
+          </div>
+        </div>
+
+        <div className="summary-card">
+          <span className="summary-icon">
+            <MapPin size={20} />
+          </span>
+
+          <div>
+            <small>Menor profundidad</small>
+            <strong>
+              {statistics.minimumDepth} km
+            </strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="report-preview">
+        <div className="preview-header">
+          <div>
+            <div className="preview-label">
+              VISTA PREVIA
+            </div>
+
+            <h2>
+              {selectedReport?.title}
+            </h2>
+
+            <p>
+              {selectedReport?.description}
+            </p>
+          </div>
+
+          {generated && (
+            <button
+              type="button"
+              className="download-button"
+            >
+              <Download size={17} />
+              Descargar {format.toUpperCase()}
+            </button>
+          )}
+        </div>
+
+        {generated ? (
+          <div className="table-wrapper">
+            <table className="reports-table">
+              <thead>
+                <tr>
+                  <th>Fecha UTC</th>
+                  <th>Hora UTC</th>
+                  <th>Latitud</th>
+                  <th>Longitud</th>
+                  <th>Profundidad</th>
+                  <th>Magnitud</th>
+                  <th>Ubicación</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredEvents.map((event) => (
+                  <tr key={event.id}>
+                    <td>{event.date}</td>
+                    <td>{event.time}</td>
+                    <td>{event.latitude}</td>
+                    <td>{event.longitude}</td>
+                    <td>{event.depth} km</td>
+                    <td>
+                      <strong>
+                        {event.magnitude.toFixed(1)}
+                      </strong>
+                    </td>
+                    <td>{event.location}</td>
+                    <td>
+                      <span
+                        className={`event-status ${event.status
+                          .toLowerCase()
+                          .replace("í", "i")}`}
+                      >
+                        {event.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+
+                {filteredEvents.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="empty-results"
+                    >
+                      No se encontraron eventos con los
+                      filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="preview-empty">
+            <FileBarChart size={42} />
+
+            <h3>
+              Reporte listo para generar
+            </h3>
+
+            <p>
+              Selecciona los parámetros y presiona
+              <strong> “Generar reporte” </strong>
+              para visualizar los resultados.
+            </p>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
