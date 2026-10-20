@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
@@ -9,14 +9,15 @@ from app.api.routes.ingestion import router as ingestion_router
 from app.api.routes.datasets import router as datasets_router
 from app.api.routes.alerts import router as alerts_router
 from app.api.routes.ml import router as ml_router
+from app.api.routes.security import router as security_router
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
+    title=settings.APP_NAME or "SEPMS",
+    version=settings.APP_VERSION or "2.0.0",
     description=(
-        "Sistema Empresarial de PredicciÃ³n y Monitoreo SÃ­smico "
-        "(SEPMS). Plataforma para monitoreo, anÃ¡lisis histÃ³rico, "
-        "Machine Learning experimental y gestiÃ³n responsable de alertas."
+        "Sistema Empresarial de Predicción y Monitoreo Sísmico "
+        "(SEPMS). Plataforma para monitoreo, análisis histórico, "
+        "Machine Learning experimental y gestión responsable de alertas."
     ),
 )
 
@@ -33,7 +34,6 @@ app.add_middleware(
 app.include_router(
     database_router,
     prefix=settings.API_V1_PREFIX,
-    
 )
 app.include_router(
     events_router,
@@ -53,6 +53,7 @@ app.include_router(
 )
 app.include_router(alerts_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ml_router, prefix=settings.API_V1_PREFIX)
+app.include_router(security_router, prefix=settings.API_V1_PREFIX)
 
 
 
@@ -60,9 +61,9 @@ app.include_router(ml_router, prefix=settings.API_V1_PREFIX)
 @app.get("/")
 def root():
     return {
-        "application": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT,
+        "application": settings.APP_NAME or "SEPMS",
+        "version": settings.APP_VERSION or "2.0.0",
+        "environment": settings.ENVIRONMENT or "production",
         "status": "online",
     }
 
@@ -74,6 +75,3 @@ def status():
         "service": "SEPMS API",
         "database": "configured",
     }
-
-from app.api.routes.security import router as security_router
-app.include_router(security_router, prefix=settings.API_V1_PREFIX)
