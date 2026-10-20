@@ -11,6 +11,7 @@ import {
   Target,
 } from "lucide-react";
 
+import "./ml.css";
 type ExperimentStatus = "En revisión" | "Completado" | "En ejecución";
 
 interface ExperimentDetail {

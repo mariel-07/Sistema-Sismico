@@ -1,12 +1,16 @@
 
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CalendarDays,
   Menu,
+  LogOut,
   Search,
   ShieldCheck,
 } from "lucide-react";
+
+import { AuthContext } from "../../context/AuthContext";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -14,6 +18,8 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const [search, setSearch] = useState("");
+  const auth = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const today = new Intl.DateTimeFormat("es-PE", {
     day: "2-digit",
@@ -73,6 +79,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <span className="notification-indicator" />
         </button>
 
+        <button
+          className="icon-button"
+          type="button"
+          onClick={() => {
+            auth?.logout();
+            navigate("/login", { replace: true });
+          }}
+          aria-label="Cerrar sesión"
+          title="Cerrar sesión"
+        >
+          <LogOut size={20} />
+        </button>
         <div className="profile-divider" />
 
         <div className="profile">

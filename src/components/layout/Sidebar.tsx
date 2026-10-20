@@ -40,15 +40,35 @@ interface MenuSection {
   items: MenuItem[];
 }
 
+/* =========================================================
+   MENÚ PRINCIPAL SEPMS
+========================================================= */
+
 const sections: MenuSection[] = [
+  /* =======================================================
+     MONITOREO SÍSMICO
+  ======================================================== */
+
   {
     id: "monitoring",
     title: "MONITOREO SÍSMICO",
     icon: Globe,
     items: [
-      { label: "Panel de Control", path: "/dashboard", icon: Activity },
-      { label: "Eventos Recientes", path: "/events", icon: FileText },
-      { label: "Mapa en Vivo", path: "/map", icon: MapPin },
+      {
+        label: "Panel de Control",
+        path: "/dashboard",
+        icon: Activity,
+      },
+      {
+        label: "Eventos Recientes",
+        path: "/events",
+        icon: FileText,
+      },
+      {
+        label: "Mapa en Vivo",
+        path: "/map",
+        icon: MapPin,
+      },
       {
         label: "Análisis Estadístico",
         path: "/statistics",
@@ -56,6 +76,11 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     PREDICCIÓN Y ANALÍTICA ML
+  ======================================================== */
+
   {
     id: "ml",
     title: "PREDICCIÓN Y ANALÍTICA ML",
@@ -78,19 +103,33 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     ALERTAS RESPONSABLES
+  ======================================================== */
+
   {
     id: "alerts",
     title: "ALERTAS RESPONSABLES",
     icon: BellRing,
     items: [
-      { label: "Centro de Alertas", path: "/alerts", icon: BellRing },
+      {
+        label: "Centro de Alertas",
+        path: "/alerts",
+        icon: BellRing,
+      },
       {
         label: "Reglas de Alertas",
-        path: "/alert-rules",
+        path: "/alerts/rules",
         icon: ShieldCheck,
       },
     ],
   },
+
+  /* =======================================================
+     FUENTES DE DATOS
+  ======================================================== */
+
   {
     id: "sources",
     title: "FUENTES DE DATOS",
@@ -108,12 +147,21 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     REPORTES EMPRESARIALES
+  ======================================================== */
+
   {
     id: "reports",
     title: "REPORTES EMPRESARIALES",
     icon: FileChartColumn,
     items: [
-      { label: "Generar Reportes", path: "/reports", icon: FileText },
+      {
+        label: "Generar Reportes",
+        path: "/reports",
+        icon: FileText,
+      },
       {
         label: "Exportaciones",
         path: "/reports/exports",
@@ -121,12 +169,21 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     ADMINISTRACIÓN
+  ======================================================== */
+
   {
     id: "admin",
     title: "ADMINISTRACIÓN",
     icon: Users,
     items: [
-      { label: "Usuarios", path: "/admin/users", icon: Users },
+      {
+        label: "Usuarios",
+        path: "/admin/users",
+        icon: Users,
+      },
       {
         label: "Roles y Permisos",
         path: "/admin/roles",
@@ -134,6 +191,11 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     CONFIGURACIÓN
+  ======================================================== */
+
   {
     id: "settings",
     title: "CONFIGURACIÓN",
@@ -151,23 +213,41 @@ const sections: MenuSection[] = [
       },
     ],
   },
+
+  /* =======================================================
+     AYUDA Y SOPORTE
+  ======================================================== */
+
   {
     id: "help",
     title: "AYUDA Y SOPORTE",
     icon: CircleHelp,
     items: [
-      { label: "Guías Técnicas", path: "/help/guides", icon: BookOpen },
-      { label: "Centro de Ayuda", path: "/help", icon: CircleHelp },
+      {
+        label: "Guías Técnicas",
+        path: "/help/guides",
+        icon: BookOpen,
+      },
+      {
+        label: "Centro de Ayuda",
+        path: "/help",
+        icon: CircleHelp,
+      },
     ],
   },
 ];
+
+/* =========================================================
+   BUSCAR SECCIÓN ACTIVA
+========================================================= */
 
 function findActiveSection(pathname: string): string | null {
   for (const section of sections) {
     const hasMatch = section.items.some(
       (item) =>
         pathname === item.path ||
-        (item.path !== "/" && pathname.startsWith(`${item.path}/`)),
+        (item.path !== "/" &&
+          pathname.startsWith(`${item.path}/`)),
     );
 
     if (hasMatch) {
@@ -177,6 +257,10 @@ function findActiveSection(pathname: string): string | null {
 
   return null;
 }
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
 
 export default function Sidebar({
   mobileOpen,
@@ -190,19 +274,32 @@ export default function Sidebar({
     () => findActiveSection(location.pathname) ?? "monitoring",
   );
 
-  // Abre automáticamente la sección de la ruta actual.
+  /* =======================================================
+     ABRIR AUTOMÁTICAMENTE LA SECCIÓN ACTIVA
+  ======================================================== */
+
   useEffect(() => {
-    const activeSection = findActiveSection(location.pathname);
+    const activeSection = findActiveSection(
+      location.pathname,
+    );
 
     if (activeSection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpenSection(activeSection);
     }
   }, [location.pathname]);
 
-  // Cierra el menú móvil después de cambiar de página.
+  /* =======================================================
+     CERRAR MENÚ MÓVIL AL CAMBIAR DE PÁGINA
+  ======================================================== */
+
   useEffect(() => {
     onClose();
-  }, [location.pathname]);
+  }, [location.pathname, onClose]);
+
+  /* =======================================================
+     MANEJAR APERTURA DE SECCIONES
+  ======================================================== */
 
   function handleSectionClick(sectionId: string) {
     if (collapsed) {
@@ -216,8 +313,16 @@ export default function Sidebar({
     );
   }
 
+  /* =======================================================
+     RENDER
+  ======================================================== */
+
   return (
     <>
+      {/* ===================================================
+          FONDO PARA MENÚ MÓVIL
+      ==================================================== */}
+
       {mobileOpen && (
         <button
           type="button"
@@ -227,6 +332,10 @@ export default function Sidebar({
         />
       )}
 
+      {/* ===================================================
+          SIDEBAR
+      ==================================================== */}
+
       <aside
         className={[
           "sidebar",
@@ -235,11 +344,18 @@ export default function Sidebar({
         ]
           .filter(Boolean)
           .join(" ")}
-        aria-label="Barra lateral"
+        aria-label="Barra lateral de navegación SEPMS"
       >
+        {/* =================================================
+            MARCA SEPMS
+        ================================================== */}
+
         <div className="sidebar-brand">
           <div className="brand-icon">
-            <Activity size={25} />
+            <Activity
+              size={25}
+              strokeWidth={2}
+            />
           </div>
 
           {!collapsed && (
@@ -259,12 +375,30 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="sidebar-status">
+        {/* =================================================
+            ESTADO DEL SISTEMA
+        ================================================== */}
+
+        <div
+          className="sidebar-status"
+          title={
+            collapsed
+              ? "Plataforma de monitoreo activa"
+              : undefined
+          }
+        >
           <span className="status-dot" />
+
           {!collapsed && (
-            <span>Plataforma de monitoreo</span>
+            <span>
+              Plataforma de monitoreo
+            </span>
           )}
         </div>
+
+        {/* =================================================
+            NAVEGACIÓN
+        ================================================== */}
 
         <nav
           className="sidebar-navigation"
@@ -272,32 +406,55 @@ export default function Sidebar({
         >
           {sections.map((section) => {
             const SectionIcon = section.icon;
-            const isOpen = openSection === section.id;
 
-            const hasActiveItem = section.items.some(
-              (item) =>
-                location.pathname === item.path ||
-                (item.path !== "/" &&
-                  location.pathname.startsWith(`${item.path}/`)),
-            );
+            const isOpen =
+              openSection === section.id;
+
+            const hasActiveItem =
+              section.items.some(
+                (item) =>
+                  location.pathname === item.path ||
+                  (item.path !== "/" &&
+                    location.pathname.startsWith(
+                      `${item.path}/`,
+                    )),
+              );
 
             return (
               <div
                 className="sidebar-section"
                 key={section.id}
               >
+                {/* =========================================
+                    CABECERA DE SECCIÓN
+                ========================================== */}
+
                 <button
                   type="button"
                   className={[
                     "sidebar-section-toggle",
-                    hasActiveItem ? "section-has-active" : "",
-                    isOpen ? "section-expanded" : "",
+                    hasActiveItem
+                      ? "section-has-active"
+                      : "",
+                    isOpen
+                      ? "section-expanded"
+                      : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  onClick={() => handleSectionClick(section.id)}
-                  aria-expanded={!collapsed && isOpen}
-                  title={collapsed ? section.title : undefined}
+                  onClick={() =>
+                    handleSectionClick(
+                      section.id,
+                    )
+                  }
+                  aria-expanded={
+                    !collapsed && isOpen
+                  }
+                  title={
+                    collapsed
+                      ? section.title
+                      : undefined
+                  }
                 >
                   <SectionIcon
                     className="sidebar-section-icon"
@@ -315,7 +472,9 @@ export default function Sidebar({
                         size={15}
                         className={[
                           "section-chevron",
-                          isOpen ? "chevron-open" : "",
+                          isOpen
+                            ? "chevron-open"
+                            : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
@@ -324,38 +483,49 @@ export default function Sidebar({
                   )}
                 </button>
 
+                {/* =========================================
+                    SUBMENÚ
+                ========================================== */}
+
                 {!collapsed && isOpen && (
                   <div className="sidebar-submenu">
-                    {section.items.map((item) => {
-                      const ItemIcon = item.icon;
+                    {section.items.map(
+                      (item) => {
+                        const ItemIcon =
+                          item.icon;
 
-                      return (
-                        <NavLink
-                          key={item.path}
-                          to={item.path}
-                          end
-                          onClick={onClose}
-                          className={({ isActive }) =>
-                            [
-                              "sidebar-submenu-link",
-                              isActive
-                                ? "sidebar-submenu-link-active"
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")
-                          }
-                        >
-                          <ItemIcon
-                            size={17}
-                            strokeWidth={1.8}
-                            className="submenu-icon"
-                          />
+                        return (
+                          <NavLink
+                            key={item.path}
+                            to={item.path}
+                            end
+                            onClick={onClose}
+                            className={({
+                              isActive,
+                            }) =>
+                              [
+                                "sidebar-submenu-link",
+                                isActive
+                                  ? "sidebar-submenu-link-active"
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")
+                            }
+                          >
+                            <ItemIcon
+                              size={17}
+                              strokeWidth={1.8}
+                              className="submenu-icon"
+                            />
 
-                          <span>{item.label}</span>
-                        </NavLink>
-                      );
-                    })}
+                            <span>
+                              {item.label}
+                            </span>
+                          </NavLink>
+                        );
+                      },
+                    )}
                   </div>
                 )}
               </div>
@@ -363,15 +533,27 @@ export default function Sidebar({
           })}
         </nav>
 
+        {/* =================================================
+            PIE DEL SIDEBAR
+        ================================================== */}
+
         <div className="sidebar-footer">
           <div className="sidebar-footer-icon">
-            <ShieldCheck size={20} />
+            <ShieldCheck
+              size={20}
+              strokeWidth={1.9}
+            />
           </div>
 
           {!collapsed && (
             <div className="sidebar-footer-info">
-              <strong>Sistema SEPMS</strong>
-              <span>Versión 1.0</span>
+              <strong>
+                Sistema SEPMS
+              </strong>
+
+              <span>
+                Versión 1.0
+              </span>
             </div>
           )}
         </div>

@@ -1,7 +1,6 @@
-
+import { useEffect, useState } from "react";
 import {
   Activity,
-  ArrowDownRight,
   ArrowUpRight,
   Clock3,
   Database,
@@ -20,50 +19,12 @@ import {
   YAxis,
 } from "recharts";
 
-const activityData = [
-  { day: "09 Oct", events: 12 },
-  { day: "10 Oct", events: 18 },
-  { day: "11 Oct", events: 14 },
-  { day: "12 Oct", events: 23 },
-  { day: "13 Oct", events: 17 },
-  { day: "14 Oct", events: 29 },
-  { day: "15 Oct", events: 21 },
-];
-
-const demoEvents = [
-  {
-    id: "DEMO-001",
-    magnitude: 4.2,
-    location: "Costa central del Perú",
-    depth: 38,
-    time: "09:24",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-002",
-    magnitude: 3.6,
-    location: "Región sur del Perú",
-    depth: 52,
-    time: "08:47",
-    status: "En revisión",
-  },
-  {
-    id: "DEMO-003",
-    magnitude: 2.8,
-    location: "Región norte del Perú",
-    depth: 24,
-    time: "08:15",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-004",
-    magnitude: 3.9,
-    location: "Frente a la costa peruana",
-    depth: 41,
-    time: "07:52",
-    status: "Verificado",
-  },
-];
+import {
+  getEvents,
+  getRecentEvents,
+} from "../services/api/events.api";
+import { getApiErrorMessage } from "../services/api/client";
+import type { SeismicEvent } from "../types/event";
 
 function MetricCard({
   title,
@@ -105,6 +66,82 @@ function MetricCard({
 }
 
 export default function Dashboard() {
+  const [recentEvents, setRecentEvents] = useState<SeismicEvent[]>([]);
+  const [catalogEvents, setCatalogEvents] = useState<SeismicEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboardData() {
+      setEventsLoading(true);
+      setEventsError("");
+
+      try {
+        const [recent, catalog] = await Promise.all([
+          getRecentEvents(10),
+          getEvents({ limit: 1000, offset: 0 }),
+        ]);
+
+        if (!cancelled) {
+          setRecentEvents(recent);
+          setCatalogEvents(catalog);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setEventsError(getApiErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setEventsLoading(false);
+        }
+      }
+    }
+
+    void loadDashboardData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const averageMagnitude = catalogEvents.length
+    ? catalogEvents.reduce((sum, event) => sum + event.magnitude, 0) /
+      catalogEvents.length
+    : null;
+
+  const activityData = (() => {
+    const now = new Date();
+
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(now);
+      date.setUTCDate(now.getUTCDate() - (6 - index));
+      const dateKey = date.toISOString().slice(0, 10);
+
+      return {
+        date: dateKey,
+        day: date.toLocaleDateString("es-PE", {
+          day: "2-digit",
+          month: "short",
+          timeZone: "UTC",
+        }),
+        events: 0,
+      };
+    });
+
+    for (const event of catalogEvents) {
+      const date = event.origin_time_utc.slice(0, 10);
+      const day = days.find((item) => item.date === date);
+
+      if (day) {
+        day.events += 1;
+      }
+    }
+
+    return days;
+  })();
+
   return (
     <div className="dashboard">
       <div className="page-heading">
@@ -121,19 +158,34 @@ export default function Dashboard() {
 
         <div className="dashboard-date">
           <Clock3 size={16} />
-          <span>Datos de demostración</span>
+          <span>
+            {eventsLoading
+              ? "Consultando backend…"
+              : eventsError
+                ? "API no disponible"
+                : "Datos recibidos de la API"}
+          </span>
         </div>
       </div>
 
-      <div className="demo-notice">
+      <div className="demo-notice" role="status">
         <div className="demo-notice-icon">
           <ShieldAlert size={19} />
         </div>
         <div>
-          <strong>Entorno de demostración</strong>
+          <strong>
+            {eventsLoading
+              ? "Consultando el catálogo sísmico"
+              : eventsError
+                ? "No se pudieron cargar los datos"
+                : "Monitoreo del catálogo sísmico"}
+          </strong>
           <p>
-            Los indicadores y eventos mostrados son ficticios. No representan
-            actividad sísmica en tiempo real ni constituyen avisos oficiales.
+            {eventsLoading
+              ? "Esperando la respuesta del backend."
+              : eventsError
+                ? eventsError
+                : `La API devolvió ${catalogEvents.length} registros para los indicadores y ${recentEvents.length} eventos recientes. Esto no representa una alerta oficial ni una predicción sísmica.`}
           </p>
         </div>
       </div>
@@ -141,29 +193,39 @@ export default function Dashboard() {
       <section className="metrics-grid" aria-label="Indicadores generales">
         <MetricCard
           title="Eventos registrados"
-          value="1,284"
-          description="Catálogo de demostración"
+          value={
+            eventsLoading
+              ? "…"
+              : catalogEvents.length.toLocaleString("es-PE")
+          }
+          description="Eventos recibidos en la muestra consultada"
           icon={Activity}
           tone="metric-blue"
         />
         <MetricCard
           title="Magnitud media"
-          value="3.42"
-          description="Muestra ilustrativa"
+          value={
+            eventsLoading
+              ? "…"
+              : averageMagnitude === null
+                ? "—"
+                : averageMagnitude.toFixed(2)
+          }
+          description="Media de los eventos consultados"
           icon={Waves}
           tone="metric-violet"
         />
         <MetricCard
           title="Fuentes configuradas"
-          value="04"
-          description="Conectores de ejemplo"
+          value="—"
+          description="Pendiente de consultar las fuentes registradas"
           icon={Database}
           tone="metric-teal"
         />
         <MetricCard
           title="Alertas operativas"
-          value="03"
-          description="Registros ficticios"
+          value="—"
+          description="Pendiente de conectar el módulo de alertas"
           icon={Radio}
           tone="metric-orange"
         />
@@ -174,14 +236,14 @@ export default function Dashboard() {
           <div className="panel-heading">
             <div>
               <h2>Actividad sísmica</h2>
-              <p>Eventos ilustrativos por día</p>
+              <p>Eventos por día en los registros consultados</p>
             </div>
             <span className="panel-period">Últimos 7 días</span>
           </div>
 
           <div className="chart-legend">
             <span className="legend-dot" />
-            Eventos registrados (demo)
+            Eventos registrados
           </div>
 
           <div className="activity-chart">
@@ -218,7 +280,7 @@ export default function Dashboard() {
                 <Line
                   type="monotone"
                   dataKey="events"
-                  name="Eventos de ejemplo"
+                  name="Eventos registrados"
                   stroke="#0D9488"
                   strokeWidth={3}
                   dot={{ r: 4, fill: "#0D9488", strokeWidth: 2, stroke: "#fff" }}
@@ -230,7 +292,9 @@ export default function Dashboard() {
 
           <div className="chart-footnote">
             <Activity size={15} />
-            <span>Serie simulada; pendiente de conectar con el catálogo real.</span>
+            <span>
+              La serie se calcula a partir de los eventos recibidos de la API.
+            </span>
           </div>
         </article>
 
@@ -287,9 +351,11 @@ export default function Dashboard() {
         <div className="panel-heading">
           <div>
             <h2>Eventos recientes</h2>
-            <p>Ejemplos de registros del catálogo sísmico</p>
+            <p>Eventos recientes devueltos por la API</p>
           </div>
-          <span className="panel-period">4 registros de ejemplo</span>
+          <span className="panel-period">
+            {eventsLoading ? "Cargando…" : `${recentEvents.length} eventos`}
+          </span>
         </div>
 
         <div className="table-wrapper">
@@ -300,47 +366,89 @@ export default function Dashboard() {
                 <th>Magnitud</th>
                 <th>Ubicación</th>
                 <th>Profundidad</th>
-                <th>Hora demo</th>
+                <th>Hora UTC</th>
                 <th>Estado</th>
               </tr>
             </thead>
             <tbody>
-              {demoEvents.map((event) => (
-                <tr key={event.id}>
-                  <td className="event-id">{event.id}</td>
-                  <td>
-                    <span className="magnitude-value">
-                      {event.magnitude.toFixed(1)}
-                    </span>
-                  </td>
-                  <td>{event.location}</td>
-                  <td>{event.depth} km</td>
-                  <td>{event.time}</td>
-                  <td>
-                    <span
-                      className={`event-status ${
-                        event.status === "Verificado"
-                          ? "event-status-verified"
-                          : "event-status-review"
-                      }`}
-                    >
-                      {event.status === "Verificado" ? (
-                        <ArrowUpRight size={13} />
-                      ) : (
-                        <Clock3 size={13} />
-                      )}
-                      {event.status}
-                    </span>
-                  </td>
+              {eventsLoading ? (
+                <tr>
+                  <td colSpan={6}>Cargando eventos desde el backend...</td>
                 </tr>
-              ))}
+              ) : eventsError ? (
+                <tr>
+                  <td colSpan={6}>{eventsError}</td>
+                </tr>
+              ) : recentEvents.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>La API no devolvió eventos recientes.</td>
+                </tr>
+              ) : (
+                recentEvents.map((event) => {
+                  const review = (
+                    event.review_status ??
+                    event.event_status ??
+                    ""
+                  ).toLowerCase();
+
+                  const verified = [
+                    "verified",
+                    "verified_by_authority",
+                    "approved",
+                    "verificado",
+                  ].includes(review);
+
+                  const location =
+                    event.reference_location ||
+                    [
+                      event.district,
+                      event.province,
+                      event.department,
+                    ]
+                      .filter(Boolean)
+                      .join(", ") ||
+                    `${event.latitude.toFixed(3)}, ${event.longitude.toFixed(3)}`;
+
+                  return (
+                    <tr key={event.id}>
+                      <td className="event-id">
+                        {event.external_id || event.id}
+                      </td>
+                      <td>
+                        <span className="magnitude-value">
+                          {event.magnitude.toFixed(1)}
+                        </span>
+                      </td>
+                      <td>{location}</td>
+                      <td>{event.depth_km.toFixed(1)} km</td>
+                      <td>
+                        {new Date(event.origin_time_utc)
+                          .toISOString()
+                          .slice(11, 19)}{" "}
+                        UTC
+                      </td>
+                      <td>
+                        <span
+                          className={`event-status ${
+                            verified
+                              ? "event-status-verified"
+                              : "event-status-review"
+                          }`}
+                        >
+                          {verified ? (
+                            <ArrowUpRight size={13} />
+                          ) : (
+                            <Clock3 size={13} />
+                          )}
+                          {verified ? "Verificado" : "En revisión"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-        </div>
-
-        <div className="table-disclaimer">
-          <ShieldAlert size={15} />
-          Todos los identificadores y registros de esta tabla son ficticios.
         </div>
       </section>
     </div>

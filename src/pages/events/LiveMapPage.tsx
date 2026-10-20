@@ -1,5 +1,4 @@
-
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Layers,
@@ -15,66 +14,19 @@ import {
   useMap,
 } from "react-leaflet";
 import type { LatLngExpression } from "leaflet";
+import { getMapEvents } from "../../services/api/events.api";
+import { getApiErrorMessage } from "../../services/api/client";
+import type { SeismicEvent } from "../../types/event";
 
 interface MapEvent {
   id: string;
   location: string;
   magnitude: number;
   depth: number;
-  position: [number, number];
+  latitude: number;
+  longitude: number;
+  time: string;
 }
-
-const MAP_EVENTS: MapEvent[] = [
-  {
-    id: "DEMO-001",
-    location: "Costa central del Perú",
-    magnitude: 4.2,
-    depth: 38,
-    position: [-12.1, -77.3],
-  },
-  {
-    id: "DEMO-002",
-    location: "Región sur del Perú",
-    magnitude: 3.6,
-    depth: 52,
-    position: [-16.4, -73.2],
-  },
-  {
-    id: "DEMO-003",
-    location: "Región norte del Perú",
-    magnitude: 2.8,
-    depth: 24,
-    position: [-5.8, -80.1],
-  },
-  {
-    id: "DEMO-004",
-    location: "Frente a la costa peruana",
-    magnitude: 3.9,
-    depth: 41,
-    position: [-14.2, -76.0],
-  },
-  {
-    id: "DEMO-005",
-    location: "Zona costera",
-    magnitude: 2.4,
-    depth: 18,
-    position: [-9.2, -78.6],
-  },
-  {
-    id: "DEMO-006",
-    location: "Región sur, zona costera",
-    magnitude: 4.8,
-    depth: 67,
-    position: [-17.1, -71.5],
-  },
-  {
-    id: "DEMO-007",
-    location: "Región oriental",
-    magnitude: 3.1,
-    depth: 33,
-    position: [-8.4, -74.9],
-  },
-];
 
 function ResetMapButton() {
   const map = useMap();
@@ -90,17 +42,81 @@ function ResetMapButton() {
   );
 }
 
+function toMapEvent(event: SeismicEvent): MapEvent {
+  return {
+    id: event.external_id || event.id,
+    location:
+      event.reference_location ||
+      [event.district, event.province, event.department]
+        .filter(Boolean)
+        .join(", ") ||
+      `Lat. ${event.latitude.toFixed(3)}, Lon. ${event.longitude.toFixed(3)}`,
+    magnitude: event.magnitude,
+    depth: event.depth_km,
+    latitude: event.latitude,
+    longitude: event.longitude,
+    time: event.origin_time_utc,
+  };
+}
+
 export default function LiveMapPage() {
   const [minimumMagnitude, setMinimumMagnitude] = useState("0");
   const [showEvents, setShowEvents] = useState(true);
+  const [events, setEvents] = useState<MapEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMapEvents() {
+      setLoading(true);
+      setApiError("");
+
+      try {
+        const data = await getMapEvents({ limit: 10000 });
+        if (!cancelled) {
+          setEvents(
+            data
+              .filter(
+                (event) =>
+                  Number.isFinite(event.latitude) &&
+                  Number.isFinite(event.longitude) &&
+                  event.latitude >= -90 &&
+                  event.latitude <= 90 &&
+                  event.longitude >= -180 &&
+                  event.longitude <= 180,
+              )
+              .map(toMapEvent),
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiError(getApiErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadMapEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visibleEvents = useMemo(
     () =>
-      MAP_EVENTS.filter(
+      events.filter(
         (event) => event.magnitude >= Number(minimumMagnitude),
       ),
-    [minimumMagnitude],
+    [events, minimumMagnitude],
   );
+
+  const maximumMagnitude =
+    visibleEvents.length > 0
+      ? Math.max(...visibleEvents.map((event) => event.magnitude))
+      : null;
 
   const center: LatLngExpression = [-9.5, -75.0];
 
@@ -114,18 +130,27 @@ export default function LiveMapPage() {
           </div>
           <h1>Mapa sísmico</h1>
           <p>
-            Explora la distribución geográfica de los registros del catálogo.
+            Distribución geográfica de los eventos recibidos desde el catálogo.
           </p>
         </div>
       </div>
 
-      <div className="demo-notice">
+      <div className="demo-notice" role="status">
         <ShieldAlert size={19} />
         <div>
-          <strong>Mapa de demostración</strong>
+          <strong>
+            {loading
+              ? "Consultando eventos"
+              : apiError
+                ? "No se pudo cargar el mapa"
+                : "Datos del catálogo"}
+          </strong>
           <p>
-            Los marcadores son ficticios. El mapa base requiere conexión a
-            internet y no representa una transmisión sísmica en vivo.
+            {loading
+              ? "Esperando respuesta del backend."
+              : apiError
+                ? apiError
+                : `${events.length} eventos recibidos. El mapa muestra registros almacenados, no una predicción ni una transmisión en tiempo real.`}
           </p>
         </div>
       </div>
@@ -134,14 +159,14 @@ export default function LiveMapPage() {
         <article className="metric-card">
           <div className="metric-label">Registros visibles</div>
           <div className="metric-value">{visibleEvents.length}</div>
-          <div className="metric-description">Después de aplicar el filtro</div>
+          <div className="metric-description">Según el filtro de magnitud</div>
         </article>
         <article className="metric-card">
-          <div className="metric-label">Magnitud máxima de la muestra</div>
+          <div className="metric-label">Magnitud máxima visible</div>
           <div className="metric-value">
-            {Math.max(...MAP_EVENTS.map((event) => event.magnitude)).toFixed(1)}
+            {maximumMagnitude === null ? "—" : maximumMagnitude.toFixed(1)}
           </div>
-          <div className="metric-description">Dato demostrativo</div>
+          <div className="metric-description">Registros filtrados</div>
         </article>
         <article className="metric-card">
           <div className="metric-label">Área de visualización</div>
@@ -157,7 +182,7 @@ export default function LiveMapPage() {
               <Layers size={18} />
               Distribución de eventos
             </h2>
-            <p>Selecciona un marcador para consultar su ficha.</p>
+            <p>Selecciona un marcador para consultar sus datos.</p>
           </div>
 
           <label className="map-filter">
@@ -223,9 +248,9 @@ export default function LiveMapPage() {
 
                 return (
                   <CircleMarker
-                    key={event.id}
-                    center={event.position}
-                    radius={5 + event.magnitude * 1.5}
+                    key={`${event.id}-${event.time}`}
+                    center={[event.latitude, event.longitude]}
+                    radius={5 + Math.min(event.magnitude, 8) * 1.5}
                     pathOptions={{
                       color,
                       fillColor: color,
@@ -237,11 +262,15 @@ export default function LiveMapPage() {
                       <div className="map-popup">
                         <strong>{event.id}</strong>
                         <p>{event.location}</p>
-                        <span>
-                          Magnitud: {event.magnitude.toFixed(1)}
-                        </span>
+                        <span>Magnitud: {event.magnitude.toFixed(1)}</span>
                         <span>Profundidad: {event.depth} km</span>
-                        <small>Registro ficticio de demostración</small>
+                        <small>
+                          {new Date(event.time).toLocaleString("es-PE", {
+                            timeZone: "UTC",
+                            dateStyle: "medium",
+                            timeStyle: "medium",
+                          })} UTC
+                        </small>
                       </div>
                     </Popup>
                   </CircleMarker>
@@ -255,7 +284,11 @@ export default function LiveMapPage() {
         <div className="map-footer">
           <Activity size={15} />
           <span>
-            {visibleEvents.length} registros de ejemplo incluidos en el filtro.
+            {loading
+              ? "Cargando registros..."
+              : apiError
+                ? "No se recibieron datos del backend."
+                : `${visibleEvents.length} registros del catálogo cumplen el filtro.`}
           </span>
         </div>
       </section>

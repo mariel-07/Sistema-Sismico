@@ -1,5 +1,6 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getAlertRules, createAlertRule, updateAlertRule, deleteAlertRule } from "../../services/api/alertRules.api";
 import {
   BellRing,
   Plus,
@@ -32,57 +33,6 @@ interface AlertRule {
 
 type RuleForm = Omit<AlertRule, "id">;
 
-const initialRules: AlertRule[] = [
-  {
-    id: "RULE-DEMO-001",
-    name: "Integridad de datos",
-    description: "Detecta una caída en el indicador de calidad del dataset.",
-    metric: "Calidad del dataset",
-    condition: "menor",
-    threshold: 80,
-    unit: "%",
-    priority: "Alta",
-    enabled: true,
-    channel: "Panel interno",
-  },
-  {
-    id: "RULE-DEMO-002",
-    name: "Disponibilidad de fuente",
-    description: "Revisa el estado de disponibilidad de una fuente conectada.",
-    metric: "Disponibilidad",
-    condition: "menor",
-    threshold: 95,
-    unit: "%",
-    priority: "Media",
-    enabled: true,
-    channel: "Panel interno",
-  },
-  {
-    id: "RULE-DEMO-003",
-    name: "Error de procesamiento",
-    description: "Ejemplo de regla para errores del procesamiento de datos.",
-    metric: "Errores de procesamiento",
-    condition: "mayor",
-    threshold: 5,
-    unit: "errores",
-    priority: "Alta",
-    enabled: false,
-    channel: "Panel interno",
-  },
-  {
-    id: "RULE-DEMO-004",
-    name: "Validación de modelo",
-    description: "Solicita revisar las métricas de un modelo experimental.",
-    metric: "Error del modelo",
-    condition: "mayor",
-    threshold: 10,
-    unit: "%",
-    priority: "Media",
-    enabled: true,
-    channel: "Panel interno",
-  },
-];
-
 const emptyForm: RuleForm = {
   name: "",
   description: "",
@@ -103,7 +53,10 @@ const priorityStyles: Record<RulePriority, string> = {
 };
 
 export default function AlertRulesPage() {
-  const [rules, setRules] = useState<AlertRule[]>(initialRules);
+  const [rules, setRules] = useState<AlertRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => { getAlertRules().then(setRules).catch(() => setLoadError("No se pudieron cargar las reglas del servidor.")).finally(() => setLoading(false)); }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
   const [priorityFilter, setPriorityFilter] = useState("Todas");
@@ -201,53 +154,54 @@ export default function AlertRulesPage() {
       description: form.description.trim(),
     };
 
-    if (editingId) {
-      setRules((current) =>
-        current.map((rule) =>
-          rule.id === editingId
-            ? { ...normalizedForm, id: editingId }
-            : rule,
-        ),
-      );
-      setSuccess("Regla actualizada en la demostración.");
-    } else {
-      const newRule: AlertRule = {
-        ...normalizedForm,
-        id: `RULE-DEMO-${Date.now()}`,
-      };
-      setRules((current) => [newRule, ...current]);
-      setSuccess("Regla creada en la demostración.");
+    const save = async () => {
+      try {
+        if (editingId) {
+          const updated = await updateAlertRule(editingId, normalizedForm);
+          setRules((current) => current.map((rule) => rule.id === editingId ? updated : rule));
+          setSuccess("Regla actualizada.");
+        } else {
+          const created = await createAlertRule(normalizedForm);
+          setRules((current) => [created, ...current]);
+          setSuccess("Regla creada.");
+        }
+        setModalOpen(false);
+      } catch {
+        setError("No se pudo guardar la regla en el servidor.");
+      }
+    };
+    void save();
+  };
+
+  const toggleRule = async (id: string) => {
+    const rule = rules.find((item) => item.id === id);
+    if (!rule) return;
+    try {
+      const updated = await updateAlertRule(id, { ...rule, enabled: !rule.enabled });
+      setRules((current) => current.map((item) => item.id === id ? updated : item));
+      setSuccess("Estado de la regla actualizado.");
+    } catch {
+      setError("No se pudo actualizar el estado de la regla.");
     }
-
-    setModalOpen(false);
   };
 
-  const toggleRule = (id: string) => {
-    setRules((current) =>
-      current.map((rule) =>
-        rule.id === id ? { ...rule, enabled: !rule.enabled } : rule,
-      ),
-    );
-    setSuccess("Estado actualizado localmente.");
-  };
-
-  const deleteRule = (id: string) => {
-    const confirmed = window.confirm(
-      "¿Deseas eliminar esta regla de demostración?",
-    );
-
+  const deleteRule = async (id: string) => {
+    const confirmed = window.confirm("?Deseas eliminar esta regla?");
     if (!confirmed) return;
-
-    setRules((current) => current.filter((rule) => rule.id !== id));
-    setSuccess("Regla eliminada de la demostración.");
+    try {
+      await deleteAlertRule(id);
+      setRules((current) => current.filter((rule) => rule.id !== id));
+      setSuccess("Regla eliminada.");
+    } catch {
+      setError("No se pudo eliminar la regla del servidor.");
+    }
   };
 
   const resetDemo = () => {
-    setRules(initialRules);
     setSearch("");
     setStatusFilter("Todas");
     setPriorityFilter("Todas");
-    setSuccess("Se restauraron las reglas de demostración.");
+    setSuccess("Se limpiaron los filtros. Las reglas guardadas no se modificaron.");
     setError("");
   };
 
@@ -307,6 +261,8 @@ export default function AlertRulesPage() {
         </div>
       )}
 
+      {loading && <p>Cargando reglas?</p>}
+      {loadError && <p role="alert">{loadError}</p>}
       <section className="metrics-grid rule-metrics">
         <article className="metric-card">
           <div className="metric-top">

@@ -1,9 +1,7 @@
-
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   CheckCircle2,
-  Clock3,
   Database,
   Globe2,
   Plus,
@@ -12,182 +10,135 @@ import {
   ShieldAlert,
   XCircle,
 } from "lucide-react";
-import './SourceFormPage';
-type SourceStatus = "Activa" | "Inactiva" | "Error";
+import {
+  createSource,
+  getSources,
+  updateSourceStatus,
+  type DataSource,
+} from "../../services/api/sources.api";
+import { getApiErrorMessage } from "../../services/api/client";
 
-type DataSource = {
-  id: number;
-  name: string;
-  provider: string;
-  endpoint: string;
-  frequency: string;
-  status: SourceStatus;
-  lastSync: string;
-  eventsReceived: number;
-  latency: string;
-};
+type SourceStatus = "Activa" | "Inactiva";
 
-const initialSources: DataSource[] = [
-  {
-    id: 1,
-    name: "Fuente sísmica principal",
-    provider: "IGP",
-    endpoint: "Servicio oficial por configurar",
-    frequency: "Cada 5 minutos",
-    status: "Activa",
-    lastSync: "Datos de demostración",
-    eventsReceived: 128,
-    latency: "—",
-  },
-  {
-    id: 2,
-    name: "Catálogo de referencia",
-    provider: "USGS",
-    endpoint: "Servicio externo por configurar",
-    frequency: "Cada 15 minutos",
-    status: "Activa",
-    lastSync: "Datos de demostración",
-    eventsReceived: 96,
-    latency: "—",
-  },
-  {
-    id: 3,
-    name: "Fuente secundaria",
-    provider: "Personalizada",
-    endpoint: "Sin endpoint configurado",
-    frequency: "Cada 30 minutos",
-    status: "Inactiva",
-    lastSync: "Sin sincronizaciones",
-    eventsReceived: 0,
-    latency: "—",
-  },
-];
+function getStatus(source: DataSource): SourceStatus {
+  return source.is_active ? "Activa" : "Inactiva";
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "Sin registros";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Fecha no disponible";
+  return date.toLocaleString("es-PE");
+}
 
 export default function SourcesPage() {
-  const [sources, setSources] = useState<DataSource[]>(initialSources);
+  const [sources, setSources] = useState<DataSource[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
   const [showForm, setShowForm] = useState(false);
-  const [syncingId, setSyncingId] = useState<number | null>(null);
-  const [notice, setNotice] = useState(
-    "Vista de demostración: las fuentes aún no están conectadas al backend."
-  );
-
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
-    provider: "Personalizada",
+    organization: "IGP",
+    source_type: "official",
     endpoint: "",
-    frequency: "Cada 15 minutos",
+    description: "",
+    license_info: "",
   });
+
+  const loadSources = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getSources();
+      setSources(data);
+      setNotice("Fuentes cargadas desde el backend.");
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadSources();
+  }, [loadSources]);
 
   const filteredSources = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     return sources.filter((source) => {
-      const matchesSearch =
-        source.name.toLowerCase().includes(query) ||
-        source.provider.toLowerCase().includes(query) ||
-        source.endpoint.toLowerCase().includes(query);
-
-      const matchesStatus =
-        statusFilter === "Todas" || source.status === statusFilter;
-
-      return matchesSearch && matchesStatus;
+      const matchesSearch = [
+        source.name,
+        source.organization ?? "",
+        source.source_type,
+        source.base_url ?? "",
+      ].some((value) => value.toLowerCase().includes(query));
+      const status = getStatus(source);
+      return matchesSearch &&
+        (statusFilter === "Todas" || status === statusFilter);
     });
   }, [sources, search, statusFilter]);
 
-  const activeCount = sources.filter(
-    (source) => source.status === "Activa"
-  ).length;
-
-  const errorCount = sources.filter(
-    (source) => source.status === "Error"
-  ).length;
-
-  const totalEvents = sources.reduce(
-    (total, source) => total + source.eventsReceived,
-    0
+  const activeCount = sources.filter((source) => source.is_active).length;
+  const inactiveCount = sources.length - activeCount;
+  const totalRuns = sources.reduce(
+    (total, source) => total + (source.total_runs ?? 0),
+    0,
   );
 
-  function handleCreateSource(event: React.FormEvent<HTMLFormElement>) {
+  async function handleCreateSource(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const newSource: DataSource = {
-      id: Date.now(),
-      name: form.name.trim(),
-      provider: form.provider,
-      endpoint: form.endpoint.trim(),
-      frequency: form.frequency,
-      status: "Inactiva",
-      lastSync: "Nunca",
-      eventsReceived: 0,
-      latency: "—",
-    };
-
-    setSources((current) => [newSource, ...current]);
-    setForm({
-      name: "",
-      provider: "Personalizada",
-      endpoint: "",
-      frequency: "Cada 15 minutos",
-    });
-    setShowForm(false);
-    setNotice(
-      "Fuente registrada localmente. Configura el backend para conectarla a un proveedor real."
-    );
-  }
-
-  function handleSync(sourceId: number) {
-    const source = sources.find((item) => item.id === sourceId);
-
-    if (!source) return;
-
-    if (!source.endpoint.trim() ||
-        source.endpoint.includes("por configurar") ||
-        source.endpoint.includes("Sin endpoint")) {
-      setNotice(
-        `No se puede conectar "${source.name}": configura un endpoint válido y la integración del backend.`
-      );
-      return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await createSource({
+        name: form.name.trim(),
+        organization: form.organization.trim() || null,
+        source_type: form.source_type,
+        base_url: form.endpoint.trim() || null,
+        description: form.description.trim() || null,
+        license_info: form.license_info.trim() || null,
+        is_active: false,
+      });
+      setForm({
+        name: "",
+        organization: "IGP",
+        source_type: "official",
+        endpoint: "",
+        description: "",
+        license_info: "",
+      });
+      setShowForm(false);
+      setNotice("Fuente guardada correctamente en la base de datos.");
+      await loadSources();
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setSaving(false);
     }
-
-    setSyncingId(sourceId);
-    setNotice(
-      `Solicitud de prueba para "${source.name}". Esta interfaz no descarga datos sísmicos reales.`
-    );
-
-    // Simulación local para comprobar el estado visual de la interfaz.
-    window.setTimeout(() => {
-      setSources((current) =>
-        current.map((item) =>
-          item.id === sourceId
-            ? {
-                ...item,
-                lastSync: "Prueba local completada",
-                status: "Activa",
-              }
-            : item
-        )
-      );
-
-      setSyncingId(null);
-      setNotice(
-        `Prueba local completada para "${source.name}". Todavía no se han importado datos reales.`
-      );
-    }, 900);
   }
 
-  function toggleStatus(sourceId: number) {
-    setSources((current) =>
-      current.map((source) =>
-        source.id === sourceId
-          ? {
-              ...source,
-              status: source.status === "Inactiva" ? "Activa" : "Inactiva",
-            }
-          : source
-      )
-    );
+  async function toggleStatus(source: DataSource) {
+    setBusyId(source.id);
+    setError("");
+    setNotice("");
+    try {
+      await updateSourceStatus(source.id, !source.is_active);
+      setNotice(
+        `Fuente "${source.name}" ${source.is_active ? "desactivada" : "activada"}.`,
+      );
+      await loadSources();
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -197,11 +148,10 @@ export default function SourcesPage() {
           <span className="eyebrow">INTEGRACIONES Y CONECTIVIDAD</span>
           <h1>Fuentes de datos</h1>
           <p>
-            Administra proveedores, frecuencias de consulta y estado de las
-            integraciones sísmicas.
+            Administra las fuentes sísmicas registradas y consulta su estado
+            real en el backend.
           </p>
         </div>
-
         <button
           className="primary-button"
           onClick={() => setShowForm((current) => !current)}
@@ -211,57 +161,48 @@ export default function SourcesPage() {
         </button>
       </header>
 
-      <div className="demo-notice source-notice">
-        <ShieldAlert size={20} />
-        <div>
-          <strong>Modo de demostración</strong>
-          <p>{notice}</p>
+      {(notice || error) && (
+        <div className={`demo-notice source-notice${error ? " source-error" : ""}`}>
+          {error ? <ShieldAlert size={20} /> : <CheckCircle2 size={20} />}
+          <div>
+            <strong>{error ? "No se pudo completar la operación" : "Estado"}</strong>
+            <p>{error || notice}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="metrics-grid">
         <article className="metric-card">
           <div className="metric-top">
             <span className="metric-label">Fuentes registradas</span>
-            <span className="metric-icon metric-blue">
-              <Database size={20} />
-            </span>
+            <span className="metric-icon metric-blue"><Database size={20} /></span>
           </div>
           <strong className="metric-value">{sources.length}</strong>
-          <span className="metric-description">Fuentes configuradas en esta vista</span>
+          <span className="metric-description">Registros obtenidos de la base de datos</span>
         </article>
-
         <article className="metric-card">
           <div className="metric-top">
             <span className="metric-label">Fuentes activas</span>
-            <span className="metric-icon metric-teal">
-              <CheckCircle2 size={20} />
-            </span>
+            <span className="metric-icon metric-teal"><CheckCircle2 size={20} /></span>
           </div>
           <strong className="metric-value">{activeCount}</strong>
-          <span className="metric-description">Marcadas como activas localmente</span>
+          <span className="metric-description">Marcadas como activas en el backend</span>
         </article>
-
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Eventos de ejemplo</span>
-            <span className="metric-icon metric-violet">
-              <Activity size={20} />
-            </span>
+            <span className="metric-label">Ejecuciones registradas</span>
+            <span className="metric-icon metric-violet"><Activity size={20} /></span>
           </div>
-          <strong className="metric-value">{totalEvents.toLocaleString("es-PE")}</strong>
-          <span className="metric-description">Conteo de demostración, no datos en vivo</span>
+          <strong className="metric-value">{totalRuns.toLocaleString("es-PE")}</strong>
+          <span className="metric-description">Historial de ejecuciones por fuente</span>
         </article>
-
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Fuentes con error</span>
-            <span className="metric-icon metric-orange">
-              <XCircle size={20} />
-            </span>
+            <span className="metric-label">Fuentes inactivas</span>
+            <span className="metric-icon metric-orange"><XCircle size={20} /></span>
           </div>
-          <strong className="metric-value">{errorCount}</strong>
-          <span className="metric-description">Fuentes marcadas con error</span>
+          <strong className="metric-value">{inactiveCount}</strong>
+          <span className="metric-description">Marcadas como inactivas en el backend</span>
         </article>
       </div>
 
@@ -270,10 +211,9 @@ export default function SourcesPage() {
           <div className="panel-heading">
             <div>
               <h2>Registrar fuente</h2>
-              <p>Los datos se guardarán temporalmente en esta pantalla.</p>
+              <p>La fuente se guardará en la base de datos.</p>
             </div>
           </div>
-
           <form onSubmit={handleCreateSource} className="source-form">
             <label>
               Nombre de la fuente
@@ -281,68 +221,62 @@ export default function SourcesPage() {
                 required
                 minLength={3}
                 value={form.name}
-                onChange={(event) =>
-                  setForm({ ...form, name: event.target.value })
-                }
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
                 placeholder="Ej. Catálogo sísmico regional"
               />
             </label>
-
             <label>
-              Proveedor
+              Tipo de fuente
               <select
-                value={form.provider}
-                onChange={(event) =>
-                  setForm({ ...form, provider: event.target.value })
-                }
+                value={form.source_type}
+                onChange={(event) => setForm({ ...form, source_type: event.target.value })}
               >
-                <option value="IGP">IGP</option>
-                <option value="USGS">USGS</option>
-                <option value="EMSC">EMSC</option>
-                <option value="Personalizada">Personalizada</option>
+                <option value="official">Oficial</option>
+                <option value="catalog">Catálogo</option>
+                <option value="api">API externa</option>
+                <option value="custom">Personalizada</option>
               </select>
             </label>
-
             <label className="source-form-wide">
-              URL del servicio o endpoint
+              URL del servicio (opcional)
               <input
-                required
                 type="url"
                 value={form.endpoint}
-                onChange={(event) =>
-                  setForm({ ...form, endpoint: event.target.value })
-                }
+                onChange={(event) => setForm({ ...form, endpoint: event.target.value })}
                 placeholder="https://ejemplo.org/api/eventos"
               />
             </label>
-
             <label>
-              Frecuencia de consulta
-              <select
-                value={form.frequency}
-                onChange={(event) =>
-                  setForm({ ...form, frequency: event.target.value })
-                }
-              >
-                <option>Cada 5 minutos</option>
-                <option>Cada 15 minutos</option>
-                <option>Cada 30 minutos</option>
-                <option>Cada 1 hora</option>
-                <option>Manual</option>
-              </select>
+              Organización
+              <input
+                value={form.organization}
+                onChange={(event) => setForm({ ...form, organization: event.target.value })}
+                placeholder="Organización"
+              />
             </label>
-
+            <label>
+              Licencia o información de uso
+              <input
+                value={form.license_info}
+                onChange={(event) => setForm({ ...form, license_info: event.target.value })}
+                placeholder="Licencia o condiciones"
+              />
+            </label>
+            <label className="source-form-wide">
+              Descripción
+              <input
+                value={form.description}
+                onChange={(event) => setForm({ ...form, description: event.target.value })}
+                placeholder="Descripción de la fuente"
+              />
+            </label>
             <div className="source-form-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setShowForm(false)}
-              >
+              <button type="button" className="secondary-button" onClick={() => setShowForm(false)}>
                 Cancelar
               </button>
-              <button type="submit" className="primary-button">
+              <button type="submit" className="primary-button" disabled={saving}>
                 <Plus size={17} />
-                Registrar fuente
+                {saving ? "Guardando..." : "Registrar fuente"}
               </button>
             </div>
           </form>
@@ -353,11 +287,9 @@ export default function SourcesPage() {
         <div className="panel-heading source-list-heading">
           <div>
             <h2>Catálogo de fuentes</h2>
-            <p>Consulta el estado y la configuración de cada proveedor.</p>
+            <p>Datos consultados directamente desde el backend.</p>
           </div>
-          <span className="source-total">
-            {filteredSources.length} resultado(s)
-          </span>
+          <span className="source-total">{filteredSources.length} resultado(s)</span>
         </div>
 
         <div className="source-toolbar">
@@ -366,11 +298,10 @@ export default function SourcesPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar fuente, proveedor o endpoint..."
+              placeholder="Buscar fuente, organización o endpoint..."
               aria-label="Buscar fuentes"
             />
           </label>
-
           <select
             className="source-status-filter"
             value={statusFilter}
@@ -380,8 +311,16 @@ export default function SourcesPage() {
             <option value="Todas">Todos los estados</option>
             <option value="Activa">Activas</option>
             <option value="Inactiva">Inactivas</option>
-            <option value="Error">Con error</option>
           </select>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadSources()}
+            disabled={loading}
+          >
+            <RefreshCw size={16} />
+            {loading ? "Actualizando..." : "Actualizar"}
+          </button>
         </div>
 
         <div className="source-table-wrapper">
@@ -389,112 +328,87 @@ export default function SourcesPage() {
             <thead>
               <tr>
                 <th>Fuente</th>
-                <th>Frecuencia</th>
+                <th>Última ejecución</th>
                 <th>Estado</th>
-                <th>Última sincronización</th>
-                <th>Eventos de ejemplo</th>
+                <th>Registros recibidos</th>
                 <th>Acciones</th>
               </tr>
             </thead>
-
             <tbody>
+              {loading && sources.length === 0 && (
+                <tr><td colSpan={5}>Cargando fuentes desde el backend...</td></tr>
+              )}
+              {!loading && !error && filteredSources.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="source-empty-state">
+                      <Database size={28} />
+                      <strong>No se encontraron fuentes</strong>
+                      <span>Cambia los filtros o registra una nueva fuente.</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
               {filteredSources.map((source) => (
                 <tr key={source.id}>
                   <td>
                     <div className="source-name-cell">
-                      <span className="source-provider-icon">
-                        <Globe2 size={19} />
-                      </span>
+                      <span className="source-provider-icon"><Globe2 size={19} /></span>
                       <div>
                         <strong>{source.name}</strong>
-                        <span>{source.provider}</span>
-                        <small>{source.endpoint}</small>
+                        <span>{source.organization || source.source_type}</span>
+                        <small>{source.base_url || source.description || "Sin endpoint configurado"}</small>
                       </div>
                     </div>
                   </td>
-
-                  <td>
-                    <span className="source-frequency">
-                      <Clock3 size={15} />
-                      {source.frequency}
-                    </span>
+                  <td className="source-last-sync">
+                    {formatDate(source.last_sync)}
+                    {source.last_sync_status && <small>{` · ${source.last_sync_status}`}</small>}
                   </td>
-
                   <td>
-                    <span
-                      className={`source-status source-status-${source.status.toLowerCase()}`}
-                    >
+                    <span className={`source-status source-status-${getStatus(source).toLowerCase()}`}>
                       <span />
-                      {source.status}
+                      {getStatus(source)}
                     </span>
                   </td>
-
-                  <td className="source-last-sync">{source.lastSync}</td>
-
                   <td className="source-event-count">
-                    {source.eventsReceived.toLocaleString("es-PE")}
+                    {source.total_runs.toLocaleString("es-PE")}
                   </td>
-
                   <td>
                     <div className="source-actions">
                       <button
                         className="source-action-button"
-                        onClick={() => handleSync(source.id)}
-                        disabled={syncingId === source.id}
-                        title="Probar sincronización"
-                        aria-label={`Probar sincronización de ${source.name}`}
+                        onClick={() => void loadSources()}
+                        disabled={loading}
+                        title="Actualizar datos"
+                        aria-label={`Actualizar datos de ${source.name}`}
                       >
-                        <RefreshCw
-                          size={16}
-                          className={syncingId === source.id ? "spin" : ""}
-                        />
+                        <RefreshCw size={16} />
                       </button>
                       <button
                         className="source-action-button"
-                        onClick={() => toggleStatus(source.id)}
-                        title={
-                          source.status === "Inactiva"
-                            ? "Activar fuente"
-                            : "Desactivar fuente"
-                        }
+                        onClick={() => void toggleStatus(source)}
+                        disabled={busyId === source.id}
+                        title={source.is_active ? "Desactivar fuente" : "Activar fuente"}
                         aria-label={`Cambiar estado de ${source.name}`}
                       >
-                        {source.status === "Inactiva" ? (
-                          <CheckCircle2 size={16} />
-                        ) : (
-                          <XCircle size={16} />
-                        )}
+                        {source.is_active ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
-
-              {filteredSources.length === 0 && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="source-empty-state">
-                      <Database size={28} />
-                      <strong>No se encontraron fuentes</strong>
-                      <span>
-                        Cambia los filtros o registra una nueva fuente.
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
 
         <footer className="source-table-footer">
-          <span>
-            <Activity size={15} />
-            Estado actualizado en la interfaz local
-          </span>
+          <span><Activity size={15} /> Estado consultado desde el backend</span>
           <span>SEPMS · Integraciones</span>
         </footer>
       </section>
     </section>
   );
 }
+
+

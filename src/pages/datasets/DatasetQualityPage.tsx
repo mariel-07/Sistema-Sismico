@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getDatasetQuality, type DatasetQuality } from "../../services/api/datasets.api";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -30,95 +31,12 @@ type Dataset = {
   fields: string[];
 };
 
-const initialDatasets: Dataset[] = [
-  {
-    id: "DS-001",
-    name: "Catálogo sísmico de demostración",
-    description: "Eventos ficticios para comprobar el flujo de calidad.",
-    source: "Datos de demostración",
-    records: 1250,
-    missing: 12,
-    duplicates: 8,
-    invalid: 3,
-    updatedAt: "15/10/2026",
-    status: "Revisar",
-    fields: [
-      "event_id",
-      "event_time",
-      "latitude",
-      "longitude",
-      "depth_km",
-      "magnitude",
-    ],
-  },
-  {
-    id: "DS-002",
-    name: "Dataset de magnitud y profundidad",
-    description: "Ejemplo sintético de variables numéricas para análisis.",
-    source: "Datos de demostración",
-    records: 840,
-    missing: 0,
-    duplicates: 0,
-    invalid: 0,
-    updatedAt: "14/10/2026",
-    status: "Listo",
-    fields: [
-      "event_id",
-      "latitude",
-      "longitude",
-      "depth_km",
-      "magnitude",
-    ],
-  },
-  {
-    id: "DS-003",
-    name: "Histórico regional de prueba",
-    description: "Ejemplo de estructura para registros de distintas regiones.",
-    source: "Importación simulada",
-    records: 3200,
-    missing: 87,
-    duplicates: 21,
-    invalid: 14,
-    updatedAt: "12/10/2026",
-    status: "Pendiente",
-    fields: [
-      "event_id",
-      "event_time",
-      "region",
-      "latitude",
-      "longitude",
-      "magnitude",
-    ],
-  },
-  {
-    id: "DS-004",
-    name: "Variables geográficas de prueba",
-    description: "Dataset ficticio para validar coordenadas y profundidad.",
-    source: "Importación simulada",
-    records: 560,
-    missing: 4,
-    duplicates: 0,
-    invalid: 2,
-    updatedAt: "10/10/2026",
-    status: "Revisar",
-    fields: [
-      "event_id",
-      "latitude",
-      "longitude",
-      "depth_km",
-    ],
-  },
-];
+
 
 function getQualityPercent(dataset: Dataset) {
   if (dataset.records <= 0) return 0;
 
-  const affected = Math.min(
-    dataset.records,
-    dataset.missing + dataset.duplicates + dataset.invalid
-  );
-
-  return Math.round(((dataset.records - affected) / dataset.records) * 100);
+return -1;
 }
 
 function getStatusClass(status: DatasetStatus) {
@@ -132,15 +50,46 @@ function formatNumber(value: number) {
 }
 
 export default function DatasetQualityPage() {
-  const [datasets, setDatasets] = useState<Dataset[]>(initialDatasets);
-  const [search, setSearch] = useState("");
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [quality, setQuality] = useState<DatasetQuality | null>(null);
+  const [loadingQuality, setLoadingQuality] = useState(true);
+const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [selected, setSelected] = useState<Dataset | null>(null);
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [notice, setNotice] = useState(
-    "Vista de demostración: los indicadores son ficticios y no representan un análisis de datos reales."
+    "Indicadores obtenidos desde la API real del catálogo sísmico."
   );
 
+
+  useEffect(() => {
+    let active = true;
+    getDatasetQuality()
+      .then((data) => {
+        if (!active) return;
+        setQuality(data);
+        setDatasets([{
+          id: "DS-REAL-001",
+          name: "Catálogo sísmico real",
+          description: "Resumen calculado a partir de los registros del catálogo sísmico.",
+          source: "Catálogo sísmico IGP",
+          records: data.total_records,
+          missing: data.missing_optional_values,
+          duplicates: data.duplicate_source_hash_groups,
+          invalid: data.invalid_coordinate_records + data.negative_depth_records,
+          updatedAt: new Date().toLocaleDateString("es-PE"),
+          status: data.missing_optional_values || data.duplicate_source_hash_groups || data.invalid_coordinate_records || data.negative_depth_records ? "Revisar" : "Listo",
+          fields: ["origin_time_utc", "latitude", "longitude", "depth_km", "magnitude"],
+        }]);
+        setNotice("Indicadores cargados desde la API del catálogo sísmico.");
+      })
+      .catch(() => {
+        if (active) setNotice("No se pudieron cargar los indicadores reales. Comprueba que FastAPI está activo y vuelve a cargar la página.");
+      })
+      .finally(() => { if (active) setLoadingQuality(false); });
+    return () => { active = false; };
+  }, []);
+  
   const filteredDatasets = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -172,10 +121,9 @@ export default function DatasetQualityPage() {
     0
   );
 
-  const totalIssues = datasets.reduce(
-    (sum, item) => sum + item.missing + item.duplicates + item.invalid,
-    0
-  );
+  const totalIssues = quality
+    ? quality.missing_optional_values + quality.duplicate_source_hash_groups + quality.invalid_coordinate_records + quality.negative_depth_records
+    : 0;
 
   function validateDataset(dataset: Dataset) {
     if (validatingId) return;
@@ -251,13 +199,17 @@ export default function DatasetQualityPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "sepms-calidad-datasets-demo.csv";
+    link.download = "sepms-calidad-datasets.csv";
     link.click();
     URL.revokeObjectURL(url);
 
     setNotice(
       "Se exportó un resumen CSV de los indicadores locales de demostración."
     );
+  }
+
+  if (loadingQuality) {
+    return <section className="module-page dataset-quality-page"><p role="status">Cargando indicadores reales de calidad...</p></section>;
   }
 
   return (
@@ -281,7 +233,7 @@ export default function DatasetQualityPage() {
       <div className="demo-notice quality-demo-notice">
         <ShieldAlert size={20} />
         <div>
-          <strong>Indicadores de demostración</strong>
+          <strong>Calidad del catálogo sísmico</strong>
           <p>{notice}</p>
         </div>
       </div>
@@ -295,18 +247,18 @@ export default function DatasetQualityPage() {
             </span>
           </div>
           <strong className="metric-value">{datasets.length}</strong>
-          <span className="metric-description">Conjuntos de ejemplo</span>
+          <span className="metric-description">Catálogos consultados</span>
         </article>
 
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Registros de ejemplo</span>
+            <span className="metric-label">Registros del catálogo</span>
             <span className="metric-icon metric-violet">
               <FileSearch size={20} />
             </span>
           </div>
           <strong className="metric-value">{formatNumber(totalRecords)}</strong>
-          <span className="metric-description">No son registros sísmicos reales</span>
+          <span className="metric-description">Registros reales consultados desde la API</span>
         </article>
 
         <article className="metric-card">
@@ -329,7 +281,7 @@ export default function DatasetQualityPage() {
           </div>
           <strong className="metric-value">{formatNumber(totalIssues)}</strong>
           <span className="metric-description">
-            Faltantes, duplicados e inválidos sumados
+            Valores nulos opcionales; no equivalen a registros afectados
           </span>
         </article>
       </div>
@@ -421,17 +373,17 @@ export default function DatasetQualityPage() {
                 </div>
 
                 <div className="quality-progress-heading">
-                  <span>Integridad estimada</span>
-                  <strong>{quality}%</strong>
+                  <span>Porcentaje de integridad</span>
+                  <strong>{quality < 0 ? "No calculada" : `${quality}%`}</strong>
                 </div>
 
                 <div
                   className="quality-progress-track"
                   role="progressbar"
-                  aria-label={`Integridad estimada de ${dataset.name}`}
+                  aria-label={`Porcentaje de integridad de ${dataset.name}`}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-valuenow={quality}
+                  aria-valuenow={Math.max(0, quality)}
                 >
                   <span
                     className={
@@ -441,7 +393,7 @@ export default function DatasetQualityPage() {
                           ? "quality-progress-fill quality-fill-medium"
                           : "quality-progress-fill quality-fill-low"
                     }
-                    style={{ width: `${quality}%` }}
+                    style={{ width: `${Math.max(0, quality)}%` }}
                   />
                 </div>
 
@@ -501,7 +453,7 @@ export default function DatasetQualityPage() {
           >
             <header className="sync-detail-header">
               <div>
-                <span className="eyebrow">INSPECCIÓN DE DATASET</span>
+                <span className="eyebrow">INSPECCIÓN DEL DATASET</span>
                 <h2 id="quality-detail-title">{selected.name}</h2>
                 <p>
                   {selected.id} · {selected.source}
@@ -518,8 +470,8 @@ export default function DatasetQualityPage() {
 
             <div className="quality-detail-overview">
               <div>
-                <span>Integridad estimada</span>
-                <strong>{getQualityPercent(selected)}%</strong>
+                <span>Porcentaje de integridad</span>
+                <strong>{getQualityPercent(selected) < 0 ? "No calculada" : `${getQualityPercent(selected)}%`}</strong>
               </div>
               <span
                 className={`quality-status ${getStatusClass(selected.status)}`}
@@ -548,7 +500,7 @@ export default function DatasetQualityPage() {
                 <strong>{formatNumber(selected.invalid)}</strong>
               </div>
               <div>
-                <span>Campos de ejemplo</span>
+                <span>Campos principales</span>
                 <strong>{selected.fields.length}</strong>
               </div>
               <div>
@@ -592,7 +544,7 @@ export default function DatasetQualityPage() {
                 )}
                 {validatingId === selected.id
                   ? "Revisando..."
-                  : "Simular validación"}
+                  : "Actualizar indicadores"}
               </button>
             </div>
           </section>
@@ -601,3 +553,12 @@ export default function DatasetQualityPage() {
     </section>
   );
 }
+
+
+
+
+
+
+
+
+

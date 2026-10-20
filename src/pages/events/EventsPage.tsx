@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   CalendarDays,
@@ -14,6 +14,9 @@ import {
   X,
 } from "lucide-react";
 import './events.css';
+import { getEvents } from "../../services/api/events.api";
+import { getApiErrorMessage } from "../../services/api/client";
+import type { SeismicEvent as ApiSeismicEvent } from "../../types/event";
 
 
 type EventStatus = "Verificado" | "En revisión" | "Descartado";
@@ -32,138 +35,45 @@ interface SeismicEvent {
   status: EventStatus;
 }
 
-const DEMO_EVENTS: SeismicEvent[] = [
-  {
-    id: "DEMO-001",
-    sourceId: "SAMPLE-1001",
-    date: "2026-10-15",
-    time: "09:24:00",
-    magnitude: 4.2,
-    depth: 38,
-    latitude: -12.1,
-    longitude: -77.3,
-    location: "Costa central del Perú",
-    provider: "Catálogo demo",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-002",
-    sourceId: "SAMPLE-1002",
-    date: "2026-10-15",
-    time: "08:47:00",
-    magnitude: 3.6,
-    depth: 52,
-    latitude: -16.4,
-    longitude: -73.2,
-    location: "Región sur del Perú",
-    provider: "Catálogo demo",
-    status: "En revisión",
-  },
-  {
-    id: "DEMO-003",
-    sourceId: "SAMPLE-1003",
-    date: "2026-10-14",
-    time: "21:15:00",
-    magnitude: 2.8,
-    depth: 24,
-    latitude: -5.8,
-    longitude: -80.1,
-    location: "Región norte del Perú",
-    provider: "Catálogo demo",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-004",
-    sourceId: "SAMPLE-1004",
-    date: "2026-10-14",
-    time: "18:52:00",
-    magnitude: 3.9,
-    depth: 41,
-    latitude: -14.2,
-    longitude: -76.0,
-    location: "Frente a la costa peruana",
-    provider: "Catálogo demo",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-005",
-    sourceId: "SAMPLE-1005",
-    date: "2026-10-14",
-    time: "15:32:00",
-    magnitude: 2.4,
-    depth: 18,
-    latitude: -9.2,
-    longitude: -78.6,
-    location: "Costa norte-centro",
-    provider: "Catálogo demo",
-    status: "Descartado",
-  },
-  {
-    id: "DEMO-006",
-    sourceId: "SAMPLE-1006",
-    date: "2026-10-13",
-    time: "11:08:00",
-    magnitude: 4.8,
-    depth: 67,
-    latitude: -17.1,
-    longitude: -71.5,
-    location: "Región sur, zona costera",
-    provider: "Catálogo demo",
-    status: "En revisión",
-  },
-  {
-    id: "DEMO-007",
-    sourceId: "SAMPLE-1007",
-    date: "2026-10-12",
-    time: "06:41:00",
-    magnitude: 3.1,
-    depth: 33,
-    latitude: -8.4,
-    longitude: -74.9,
-    location: "Región oriental",
-    provider: "Catálogo demo",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-008",
-    sourceId: "SAMPLE-1008",
-    date: "2026-10-11",
-    time: "19:20:00",
-    magnitude: 2.9,
-    depth: 45,
-    latitude: -11.7,
-    longitude: -75.3,
-    location: "Sierra central",
-    provider: "Catálogo demo",
-    status: "Verificado",
-  },
-  {
-    id: "DEMO-009",
-    sourceId: "SAMPLE-1009",
-    date: "2026-10-10",
-    time: "13:14:00",
-    magnitude: 3.7,
-    depth: 29,
-    latitude: -13.5,
-    longitude: -74.2,
-    location: "Región andina sur",
-    provider: "Catálogo demo",
-    status: "En revisión",
-  },
-  {
-    id: "DEMO-010",
-    sourceId: "SAMPLE-1010",
-    date: "2026-10-09",
-    time: "02:36:00",
-    magnitude: 2.6,
-    depth: 21,
-    latitude: -6.8,
-    longitude: -79.4,
-    location: "Costa norte",
-    provider: "Catálogo demo",
-    status: "Descartado",
-  },
-];
+function mapApiEvent(event: ApiSeismicEvent): SeismicEvent {
+  const origin = new Date(event.origin_time_utc);
+  const review = (event.review_status ?? "").toLowerCase();
+
+  let status: EventStatus = "En revisión";
+  if (["verified", "approved", "verified_by_authority"].includes(review)) {
+    status = "Verificado";
+  } else if (["rejected", "discarded"].includes(review)) {
+    status = "Descartado";
+  }
+
+  const location =
+    event.reference_location ||
+    [event.district, event.province, event.department]
+      .filter(Boolean)
+      .join(", ") ||
+    `Lat. ${event.latitude.toFixed(3)}, Lon. ${event.longitude.toFixed(3)}`;
+
+  return {
+    id: event.id,
+    sourceId: event.external_id ??
+      (event.source_record_id != null ? String(event.source_record_id) : event.id),
+    date: Number.isNaN(origin.getTime())
+      ? event.origin_time_utc.slice(0, 10)
+      : origin.toISOString().slice(0, 10),
+    time: Number.isNaN(origin.getTime())
+      ? "--:--:--"
+      : origin.toISOString().slice(11, 19),
+    magnitude: event.magnitude,
+    depth: event.depth_km,
+    latitude: event.latitude,
+    longitude: event.longitude,
+    location,
+    provider: event.data_source_id
+      ? `Fuente ${event.data_source_id.slice(0, 8)}`
+      : "Fuente no identificada",
+    status,
+  };
+}
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("es-PE", {
@@ -215,7 +125,7 @@ function exportCsv(events: SeismicEvent[]) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "sepms-eventos-demostracion.csv";
+  link.download = "sepms-catalogo-sismico.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -228,13 +138,36 @@ export default function EventsPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<SeismicEvent | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [events, setEvents] = useState<SeismicEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEvents() {
+      setLoading(true);
+      setApiError("");
+      try {
+        const data = await getEvents({ limit: 1000, offset: 0 });
+        if (!cancelled) setEvents(data.map(mapApiEvent));
+      } catch (error) {
+        if (!cancelled) setApiError(getApiErrorMessage(error));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadEvents();
+    return () => { cancelled = true; };
+  }, []);
 
   const pageSize = 6;
 
   const filteredEvents = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return DEMO_EVENTS.filter((event) => {
+    return events.filter((event) => {
       const matchesSearch =
         !term ||
         [
@@ -251,7 +184,7 @@ export default function EventsPage() {
 
       return matchesSearch && matchesStatus && matchesMin && matchesMax;
     });
-  }, [search, status, minMagnitude, maxMagnitude]);
+  }, [events, search, status, minMagnitude, maxMagnitude]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -302,15 +235,20 @@ export default function EventsPage() {
         </button>
       </div>
 
-      <div className="demo-notice">
+      <div className="demo-notice" role="status">
         <div className="demo-notice-icon">
           <ShieldAlert size={19} />
         </div>
         <div>
-          <strong>Datos de demostración</strong>
+          <strong>
+            {loading ? "Consultando catálogo" : apiError ? "Error de conexión" : "Catálogo conectado"}
+          </strong>
           <p>
-            Estos registros son ficticios. Los estados de revisión son
-            ilustrativos y no implican validación por una autoridad sísmica.
+            {loading
+              ? "Esperando respuesta del backend."
+              : apiError
+                ? apiError
+                : `Se recibieron ${events.length} registros de la API. Los estados corresponden a los datos almacenados.`}
           </p>
         </div>
       </div>
@@ -485,7 +423,11 @@ export default function EventsPage() {
             </thead>
 
             <tbody>
-              {pageEvents.map((event) => (
+              {loading ? (
+                <tr><td colSpan={7}>Cargando eventos sísmicos...</td></tr>
+              ) : apiError ? (
+                <tr><td colSpan={7}>{apiError}</td></tr>
+              ) : pageEvents.map((event) => (
                 <tr key={event.id}>
                   <td>
                     <span className="event-id">{event.id}</span>
@@ -529,7 +471,7 @@ export default function EventsPage() {
                 </tr>
               ))}
 
-              {pageEvents.length === 0 && (
+              {!loading && !apiError && pageEvents.length === 0 && (
                 <tr>
                   <td colSpan={7}>
                     <div className="empty-state">
@@ -603,7 +545,7 @@ export default function EventsPage() {
 
             <div className="demo-notice">
               <ShieldAlert size={18} />
-              <p>Detalle ficticio para desarrollo y pruebas.</p>
+              <p>Detalle del registro recibido del catálogo.</p>
             </div>
 
             <div className="detail-grid">

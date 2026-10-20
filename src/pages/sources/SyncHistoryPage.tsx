@@ -1,7 +1,5 @@
-
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
   CheckCircle2,
   Clock3,
@@ -14,6 +12,11 @@ import {
   ShieldAlert,
   XCircle,
 } from "lucide-react";
+import {
+  getIngestionRuns,
+  type IngestionRun,
+} from "../../services/api/ingestion.api";
+import { getApiErrorMessage } from "../../services/api/client";
 
 type SyncStatus = "Completada" | "Con errores" | "Fallida" | "En proceso";
 
@@ -21,100 +24,83 @@ type SyncRun = {
   id: string;
   source: string;
   startedAt: string;
-  durationSeconds: number;
+  durationSeconds: number | null;
   status: SyncStatus;
   received: number;
   processed: number;
   duplicates: number;
   errors: number;
-  latencyMs: number;
   message: string;
 };
 
-const initialRuns: SyncRun[] = [
-  {
-    id: "SYNC-0008",
-    source: "Fuente sísmica principal",
-    startedAt: "15/10/2026 08:30:00",
-    durationSeconds: 12,
-    status: "Completada",
-    received: 24,
-    processed: 22,
-    duplicates: 2,
-    errors: 0,
-    latencyMs: 340,
-    message: "Ejecución de demostración completada sin errores.",
-  },
-  {
-    id: "SYNC-0007",
-    source: "Catálogo de referencia",
-    startedAt: "15/10/2026 08:15:00",
-    durationSeconds: 18,
-    status: "Con errores",
-    received: 31,
-    processed: 26,
-    duplicates: 3,
-    errors: 2,
-    latencyMs: 820,
-    message: "Dos registros de demostración no superaron la validación.",
-  },
-  {
-    id: "SYNC-0006",
-    source: "Fuente sísmica principal",
-    startedAt: "15/10/2026 08:00:00",
-    durationSeconds: 9,
-    status: "Completada",
-    received: 16,
-    processed: 16,
-    duplicates: 0,
-    errors: 0,
-    latencyMs: 290,
-    message: "Ejecución de demostración completada sin duplicados.",
-  },
-  {
-    id: "SYNC-0005",
-    source: "Fuente secundaria",
-    startedAt: "15/10/2026 07:45:00",
-    durationSeconds: 0,
-    status: "Fallida",
-    received: 0,
-    processed: 0,
-    duplicates: 0,
-    errors: 1,
-    latencyMs: 0,
-    message: "Endpoint no configurado en este ejemplo.",
-  },
-  {
-    id: "SYNC-0004",
-    source: "Catálogo de referencia",
-    startedAt: "15/10/2026 07:30:00",
-    durationSeconds: 15,
-    status: "Completada",
-    received: 19,
-    processed: 18,
-    duplicates: 1,
-    errors: 0,
-    latencyMs: 510,
-    message: "Un registro duplicado fue omitido en la simulación.",
-  },
-  {
-    id: "SYNC-0003",
-    source: "Fuente sísmica principal",
-    startedAt: "15/10/2026 07:15:00",
-    durationSeconds: 11,
-    status: "Completada",
-    received: 12,
-    processed: 12,
-    duplicates: 0,
-    errors: 0,
-    latencyMs: 310,
-    message: "Ejecución de demostración completada sin errores.",
-  },
-];
+function mapStatus(status: string): SyncStatus {
+  switch (status.toLowerCase()) {
+    case "success":
+    case "completed":
+    case "completada":
+      return "Completada";
+    case "partial":
+    case "partial_success":
+    case "con errores":
+      return "Con errores";
+    case "failed":
+    case "error":
+    case "fallida":
+      return "Fallida";
+    case "running":
+    case "pending":
+    case "processing":
+    case "en proceso":
+      return "En proceso";
+    default:
+      return "Fallida";
+  }
+}
 
-function formatDuration(seconds: number) {
-  if (seconds === 0) return "—";
-  return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+function mapRun(run: IngestionRun): SyncRun {
+  const status = mapStatus(run.status);
+  const received = run.records_received ?? 0;
+  const inserted = run.records_inserted ?? 0;
+  const updated = run.records_updated ?? 0;
+  const duplicates = run.records_duplicated ?? 0;
+  const errors = run.records_rejected ?? 0;
+
+  let message = run.error_details || "";
+
+  if (!message) {
+    message =
+      `Estado: ${run.status}. ` +
+      `Recibidos: ${received}; insertados: ${inserted}; ` +
+      `actualizados: ${updated}; duplicados: ${duplicates}; ` +
+      `rechazados: ${errors}.`;
+  }
+
+  return {
+    id: run.id,
+    source: run.source_name || run.data_source_id,
+    startedAt: formatDate(run.started_at || run.created_at),
+    durationSeconds: run.duration_seconds,
+    status,
+    received,
+    processed: inserted + updated,
+    duplicates,
+    errors,
+    message,
+  };
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "Fecha no disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Fecha no disponible";
+  return date.toLocaleString("es-PE");
+}
+
+function formatDuration(seconds: number | null) {
+  if (seconds === null || seconds === undefined || seconds < 0) return "?";
+  const totalSeconds = Math.round(seconds);
+  if (totalSeconds < 60) return `${totalSeconds} s`;
+  return `${Math.floor(totalSeconds / 60)} min ${totalSeconds % 60} s`;
 }
 
 function StatusLabel({ status }: { status: SyncStatus }) {
@@ -134,14 +120,33 @@ function StatusLabel({ status }: { status: SyncStatus }) {
 }
 
 export default function SyncHistoryPage() {
-  const [runs, setRuns] = useState<SyncRun[]>(initialRuns);
+  const [runs, setRuns] = useState<SyncRun[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [selectedRun, setSelectedRun] = useState<SyncRun | null>(null);
-  const [notice, setNotice] = useState(
-    "Los registros mostrados son ejemplos locales; todavía no proceden de una integración real."
-  );
-  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const loadRuns = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const data = await getIngestionRuns({ limit: 100, offset: 0 });
+      setRuns(data.map(mapRun));
+      setNotice("Historial cargado desde el backend.");
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadRuns();
+  }, [loadRuns]);
 
   const filteredRuns = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -164,41 +169,6 @@ export default function SyncHistoryPage() {
   const processedTotal = runs.reduce((sum, run) => sum + run.processed, 0);
   const duplicatesTotal = runs.reduce((sum, run) => sum + run.duplicates, 0);
 
-  function simulateRetry(run: SyncRun) {
-    if (retryingId) return;
-
-    setRetryingId(run.id);
-    setNotice(
-      `Reintento simulado para ${run.id}. No se ha llamado a ningún proveedor externo.`
-    );
-
-    window.setTimeout(() => {
-      const newRun: SyncRun = {
-        ...run,
-        id: `SYNC-${String(Date.now()).slice(-6)}`,
-        startedAt: new Date().toLocaleString("es-PE", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        }),
-        durationSeconds: 2,
-        status: "Completada",
-        message:
-          "Ejecución local de demostración. No se descargaron ni procesaron datos externos.",
-      };
-
-      setRuns((current) => [newRun, ...current]);
-      setRetryingId(null);
-      setNotice(
-        `Se agregó un registro de demostración para ${run.source}. La integración real sigue pendiente.`
-      );
-    }, 700);
-  }
-
   return (
     <section className="module-page sync-history-page">
       <header className="page-heading">
@@ -212,25 +182,25 @@ export default function SyncHistoryPage() {
         </div>
 
         <button
+          type="button"
           className="secondary-button"
-          onClick={() =>
-            setNotice(
-              "Vista actualizada con los registros locales. Para consultar el servidor se requiere conectar la API."
-            )
-          }
+          onClick={() => void loadRuns()}
+          disabled={loading}
         >
           <RefreshCw size={17} />
-          Actualizar vista
+          {loading ? "Actualizando..." : "Actualizar vista"}
         </button>
       </header>
 
-      <div className="demo-notice sync-demo-notice">
-        <ShieldAlert size={20} />
-        <div>
-          <strong>Datos de demostración</strong>
-          <p>{notice}</p>
+      {(error || notice) && (
+        <div className={`demo-notice sync-demo-notice${error ? " source-error" : ""}`}>
+          {error ? <ShieldAlert size={20} /> : <CheckCircle2 size={20} />}
+          <div>
+            <strong>{error ? "No se pudo cargar el historial" : "Estado"}</strong>
+            <p>{error || notice}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="metrics-grid">
         <article className="metric-card">
@@ -241,7 +211,7 @@ export default function SyncHistoryPage() {
             </span>
           </div>
           <strong className="metric-value">{runs.length}</strong>
-          <span className="metric-description">Historial local de ejemplo</span>
+          <span className="metric-description">Ejecuciones obtenidas del backend</span>
         </article>
 
         <article className="metric-card">
@@ -252,7 +222,7 @@ export default function SyncHistoryPage() {
             </span>
           </div>
           <strong className="metric-value">{completed}</strong>
-          <span className="metric-description">Sin errores registrados</span>
+          <span className="metric-description">Con estado exitoso registrado</span>
         </article>
 
         <article className="metric-card">
@@ -279,7 +249,7 @@ export default function SyncHistoryPage() {
             {processedTotal.toLocaleString("es-PE")}
           </strong>
           <span className="metric-description">
-            {duplicatesTotal} duplicados de ejemplo detectados
+            {duplicatesTotal.toLocaleString("es-PE")} duplicados registrados
           </span>
         </article>
       </div>
@@ -288,9 +258,7 @@ export default function SyncHistoryPage() {
         <div className="panel-heading sync-history-heading">
           <div>
             <h2>Registro de ejecuciones</h2>
-            <p>
-              Cada fila representa una ejecución de sincronización de ejemplo.
-            </p>
+            <p>Cada fila corresponde a una ejecución registrada en la base de datos.</p>
           </div>
           <span className="source-total">
             {filteredRuns.length} registro(s)
@@ -341,6 +309,24 @@ export default function SyncHistoryPage() {
               </tr>
             </thead>
             <tbody>
+              {loading && runs.length === 0 && (
+                <tr>
+                  <td colSpan={9}>Cargando ejecuciones desde el backend...</td>
+                </tr>
+              )}
+
+              {!loading && !error && filteredRuns.length === 0 && (
+                <tr>
+                  <td colSpan={9}>
+                    <div className="source-empty-state">
+                      <FileClock size={28} />
+                      <strong>No hay ejecuciones coincidentes</strong>
+                      <span>Prueba otra búsqueda o selecciona otro estado.</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {filteredRuns.map((run) => (
                 <tr key={run.id}>
                   <td>
@@ -354,8 +340,10 @@ export default function SyncHistoryPage() {
                     <StatusLabel status={run.status} />
                   </td>
                   <td>{formatDuration(run.durationSeconds)}</td>
-                  <td>{run.received}</td>
-                  <td className="sync-processed-cell">{run.processed}</td>
+                  <td>{run.received.toLocaleString("es-PE")}</td>
+                  <td className="sync-processed-cell">
+                    {run.processed.toLocaleString("es-PE")}
+                  </td>
                   <td>
                     <span
                       className={
@@ -364,7 +352,7 @@ export default function SyncHistoryPage() {
                           : "sync-count-normal"
                       }
                     >
-                      {run.duplicates}
+                      {run.duplicates.toLocaleString("es-PE")}
                     </span>
                   </td>
                   <td>
@@ -375,12 +363,13 @@ export default function SyncHistoryPage() {
                           : "sync-count-normal"
                       }
                     >
-                      {run.errors}
+                      {run.errors.toLocaleString("es-PE")}
                     </span>
                   </td>
                   <td>
                     <div className="source-actions">
                       <button
+                        type="button"
                         className="source-action-button"
                         onClick={() => setSelectedRun(run)}
                         title="Ver detalles"
@@ -388,41 +377,10 @@ export default function SyncHistoryPage() {
                       >
                         <Eye size={16} />
                       </button>
-                      {(run.status === "Fallida" ||
-                        run.status === "Con errores") && (
-                        <button
-                          className="source-action-button"
-                          onClick={() => simulateRetry(run)}
-                          disabled={retryingId !== null}
-                          title="Simular reintento"
-                          aria-label={`Simular reintento de ${run.id}`}
-                        >
-                          <RefreshCw
-                            size={16}
-                            className={
-                              retryingId === run.id ? "spin" : ""
-                            }
-                          />
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>
               ))}
-
-              {filteredRuns.length === 0 && (
-                <tr>
-                  <td colSpan={9}>
-                    <div className="source-empty-state">
-                      <FileClock size={28} />
-                      <strong>No hay ejecuciones coincidentes</strong>
-                      <span>
-                        Prueba otra búsqueda o selecciona otro estado.
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -430,7 +388,7 @@ export default function SyncHistoryPage() {
         <footer className="source-table-footer">
           <span>
             <Clock3 size={15} />
-            Latencia y duración: valores ilustrativos
+            Duración calculada a partir de las ejecuciones registradas
           </span>
           <span>SEPMS · Historial de ingestas</span>
         </footer>
@@ -455,6 +413,7 @@ export default function SyncHistoryPage() {
                 <p>{selectedRun.source}</p>
               </div>
               <button
+                type="button"
                 className="source-action-button"
                 onClick={() => setSelectedRun(null)}
                 aria-label="Cerrar detalles"
@@ -471,31 +430,27 @@ export default function SyncHistoryPage() {
             <div className="sync-detail-grid">
               <div>
                 <span>Recibidos</span>
-                <strong>{selectedRun.received}</strong>
+                <strong>{selectedRun.received.toLocaleString("es-PE")}</strong>
               </div>
               <div>
-                <span>Procesados</span>
-                <strong>{selectedRun.processed}</strong>
+                <span>Procesados (insertados + actualizados)</span>
+                <strong>{selectedRun.processed.toLocaleString("es-PE")}</strong>
               </div>
               <div>
                 <span>Duplicados</span>
-                <strong>{selectedRun.duplicates}</strong>
+                <strong>{selectedRun.duplicates.toLocaleString("es-PE")}</strong>
               </div>
               <div>
-                <span>Errores</span>
-                <strong>{selectedRun.errors}</strong>
+                <span>Registros rechazados</span>
+                <strong>{selectedRun.errors.toLocaleString("es-PE")}</strong>
               </div>
               <div>
                 <span>Duración</span>
                 <strong>{formatDuration(selectedRun.durationSeconds)}</strong>
               </div>
               <div>
-                <span>Latencia ilustrativa</span>
-                <strong>
-                  {selectedRun.latencyMs > 0
-                    ? `${selectedRun.latencyMs} ms`
-                    : "—"}
-                </strong>
+                <span>Latencia</span>
+                <strong>No disponible en el historial de ejecuciones</strong>
               </div>
             </div>
 
@@ -511,6 +466,7 @@ export default function SyncHistoryPage() {
 
             <div className="sync-detail-footer">
               <button
+                type="button"
                 className="primary-button"
                 onClick={() => setSelectedRun(null)}
               >

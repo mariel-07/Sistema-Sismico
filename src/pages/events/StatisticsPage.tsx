@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
@@ -18,33 +18,66 @@ import {
   YAxis,
 } from "recharts";
 
-const SAMPLE_EVENTS = [
-  { id: "DEMO-001", magnitude: 4.2, depth: 38 },
-  { id: "DEMO-002", magnitude: 3.6, depth: 52 },
-  { id: "DEMO-003", magnitude: 2.8, depth: 24 },
-  { id: "DEMO-004", magnitude: 3.9, depth: 41 },
-  { id: "DEMO-005", magnitude: 2.4, depth: 18 },
-  { id: "DEMO-006", magnitude: 4.8, depth: 67 },
-  { id: "DEMO-007", magnitude: 3.1, depth: 33 },
-  { id: "DEMO-008", magnitude: 2.9, depth: 45 },
-  { id: "DEMO-009", magnitude: 3.7, depth: 29 },
-  { id: "DEMO-010", magnitude: 2.6, depth: 21 },
-];
+import { getEvents } from "../../services/api/events.api";
+import { getApiErrorMessage } from "../../services/api/client";
+import type { SeismicEvent } from "../../types/event";
 
 export default function StatisticsPage() {
   const [minimumMagnitude, setMinimumMagnitude] = useState("0");
+  const [allEvents, setAllEvents] = useState<SeismicEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEvents() {
+      setLoading(true);
+      setApiError("");
+
+      try {
+        const data = await getEvents({
+          limit: 1000,
+          offset: 0,
+        });
+
+        if (!cancelled) {
+          setAllEvents(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiError(getApiErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const events = useMemo(
     () =>
-      SAMPLE_EVENTS.filter(
+      allEvents.filter(
         (event) => event.magnitude >= Number(minimumMagnitude),
       ),
-    [minimumMagnitude],
+    [allEvents, minimumMagnitude],
   );
 
   const stats = useMemo(() => {
-    if (!events.length) {
-      return { average: 0, averageDepth: 0, max: 0, count: 0 };
+    if (events.length === 0) {
+      return {
+        average: null as number | null,
+        averageDepth: null as number | null,
+        max: null as number | null,
+        count: 0,
+      };
     }
 
     return {
@@ -53,13 +86,15 @@ export default function StatisticsPage() {
         events.reduce((sum, event) => sum + event.magnitude, 0) /
         events.length,
       averageDepth:
-        events.reduce((sum, event) => sum + event.depth, 0) / events.length,
+        events.reduce((sum, event) => sum + event.depth_km, 0) /
+        events.length,
       max: Math.max(...events.map((event) => event.magnitude)),
     };
   }, [events]);
 
   const distribution = useMemo(() => {
     const ranges = [
+      { label: "0.0–1.9", min: 0, max: 2 },
       { label: "2.0–2.9", min: 2, max: 3 },
       { label: "3.0–3.9", min: 3, max: 4 },
       { label: "4.0–4.9", min: 4, max: 5 },
@@ -69,17 +104,20 @@ export default function StatisticsPage() {
     return ranges.map((range) => ({
       range: range.label,
       total: events.filter(
-        (event) => event.magnitude >= range.min && event.magnitude < range.max,
+        (event) =>
+          event.magnitude >= range.min &&
+          event.magnitude < range.max,
       ).length,
     }));
   }, [events]);
 
   const depthDistribution = useMemo(
     () =>
-      events.map((event) => ({
-        event: event.id.replace("DEMO-", ""),
+      events.slice(0, 50).map((event, index) => ({
+        event: String(index + 1),
         magnitude: event.magnitude,
-        depth: event.depth,
+        depth: event.depth_km,
+        id: event.external_id || event.id,
       })),
     [events],
   );
@@ -94,7 +132,8 @@ export default function StatisticsPage() {
           </div>
           <h1>Análisis estadístico</h1>
           <p>
-            Explora distribuciones de magnitud y estadísticas descriptivas.
+            Distribuciones y estadísticas descriptivas de los eventos
+            recibidos desde el catálogo sísmico.
           </p>
         </div>
 
@@ -102,7 +141,9 @@ export default function StatisticsPage() {
           <span>Magnitud mínima</span>
           <select
             value={minimumMagnitude}
-            onChange={(event) => setMinimumMagnitude(event.target.value)}
+            onChange={(event) =>
+              setMinimumMagnitude(event.target.value)
+            }
           >
             <option value="0">Todas</option>
             <option value="2">2.0+</option>
@@ -113,13 +154,22 @@ export default function StatisticsPage() {
         </label>
       </div>
 
-      <div className="demo-notice">
+      <div className="demo-notice" role="status">
         <ShieldAlert size={19} />
         <div>
-          <strong>Resultados ilustrativos</strong>
+          <strong>
+            {loading
+              ? "Cargando estadísticas"
+              : apiError
+                ? "Error al consultar el catálogo"
+                : "Estadísticas de datos reales"}
+          </strong>
           <p>
-            Las métricas se calculan sobre registros ficticios. No son un
-            diagnóstico de riesgo sísmico ni una predicción de terremotos.
+            {loading
+              ? "Consultando los eventos del backend."
+              : apiError
+                ? apiError
+                : `Se recibieron ${allEvents.length} eventos para el análisis. La consulta actual está limitada a los 1.000 registros más recientes.`}
           </p>
         </div>
       </div>
@@ -127,14 +177,18 @@ export default function StatisticsPage() {
       <section className="metrics-grid">
         <article className="metric-card">
           <div className="metric-top">
-            <span className="metric-label">Muestra analizada</span>
+            <span className="metric-label">Eventos analizados</span>
             <div className="metric-icon metric-blue">
               <Activity size={20} />
             </div>
           </div>
-          <div className="metric-value">{stats.count}</div>
+          <div className="metric-value">
+            {loading ? "…" : stats.count}
+          </div>
           <div className="metric-bottom">
-            <span className="metric-description">Registros filtrados</span>
+            <span className="metric-description">
+              Registros después del filtro
+            </span>
           </div>
         </article>
 
@@ -145,9 +199,15 @@ export default function StatisticsPage() {
               <Waves size={20} />
             </div>
           </div>
-          <div className="metric-value">{stats.average.toFixed(2)}</div>
+          <div className="metric-value">
+            {stats.average === null
+              ? "—"
+              : stats.average.toFixed(2)}
+          </div>
           <div className="metric-bottom">
-            <span className="metric-description">Media aritmética</span>
+            <span className="metric-description">
+              Media de los registros filtrados
+            </span>
           </div>
         </article>
 
@@ -158,9 +218,13 @@ export default function StatisticsPage() {
               <BarChart3 size={20} />
             </div>
           </div>
-          <div className="metric-value">{stats.max.toFixed(1)}</div>
+          <div className="metric-value">
+            {stats.max === null ? "—" : stats.max.toFixed(1)}
+          </div>
           <div className="metric-bottom">
-            <span className="metric-description">En la muestra filtrada</span>
+            <span className="metric-description">
+              Máxima en la muestra filtrada
+            </span>
           </div>
         </article>
 
@@ -171,9 +235,15 @@ export default function StatisticsPage() {
               <Activity size={20} />
             </div>
           </div>
-          <div className="metric-value">{stats.averageDepth.toFixed(1)} km</div>
+          <div className="metric-value">
+            {stats.averageDepth === null
+              ? "—"
+              : `${stats.averageDepth.toFixed(1)} km`}
+          </div>
           <div className="metric-bottom">
-            <span className="metric-description">Media aritmética</span>
+            <span className="metric-description">
+              Media de profundidad
+            </span>
           </div>
         </article>
       </section>
@@ -183,7 +253,7 @@ export default function StatisticsPage() {
           <div className="panel-heading">
             <div>
               <h2>Distribución de magnitudes</h2>
-              <p>Frecuencia por intervalo en la muestra seleccionada.</p>
+              <p>Frecuencia por intervalo en los eventos cargados.</p>
             </div>
           </div>
 
@@ -219,13 +289,21 @@ export default function StatisticsPage() {
                 />
                 <Bar
                   dataKey="total"
-                  name="Cantidad de registros"
+                  name="Cantidad de eventos"
                   radius={[5, 5, 0, 0]}
                 >
                   {distribution.map((entry, index) => (
                     <Cell
                       key={entry.range}
-                      fill={["#0d9488", "#4382db", "#9875cb", "#d98b3e"][index]}
+                      fill={
+                        [
+                          "#0d9488",
+                          "#4382db",
+                          "#9875cb",
+                          "#d98b3e",
+                          "#e16a4c",
+                        ][index]
+                      }
                     />
                   ))}
                 </Bar>
@@ -237,8 +315,11 @@ export default function StatisticsPage() {
         <article className="panel statistics-panel">
           <div className="panel-heading">
             <div>
-              <h2>Magnitud y profundidad</h2>
-              <p>Comparación de registros individuales.</p>
+              <h2>Profundidad por evento</h2>
+              <p>
+                Hasta 50 eventos de la muestra, ordenados por fecha
+                descendente.
+              </p>
             </div>
           </div>
 
@@ -270,6 +351,12 @@ export default function StatisticsPage() {
                     name === "depth" ? `${value} km` : value,
                     name === "depth" ? "Profundidad" : "Magnitud",
                   ]}
+                  labelFormatter={(label) => {
+                    const event = depthDistribution.find(
+                      (item) => item.event === String(label),
+                    );
+                    return event ? `Evento ${event.id}` : `Evento ${label}`;
+                  }}
                   contentStyle={{
                     border: "1px solid #e8edf4",
                     borderRadius: 9,
@@ -288,14 +375,20 @@ export default function StatisticsPage() {
         </article>
       </section>
 
+      {!loading && !apiError && events.length === 0 && (
+        <section className="panel statistics-notes">
+          No hay eventos que cumplan el filtro de magnitud seleccionado.
+        </section>
+      )}
+
       <section className="panel statistics-notes">
         <h2>Interpretación de la muestra</h2>
         <p>
-          La media resume los valores de magnitud de los registros incluidos.
-          La distribución permite comparar frecuencias entre intervalos. Estas
-          estadísticas dependen de la selección, cobertura y calidad de los
-          datos y no establecen por sí solas probabilidades futuras de
-          terremotos.
+          Las métricas describen los eventos cargados y el filtro
+          seleccionado. La distribución y las medias no constituyen una
+          predicción de terremotos ni una evaluación oficial del riesgo.
+          Para analizar todo el catálogo, será necesario incorporar
+          agregaciones y paginación en el backend.
         </p>
       </section>
     </div>
