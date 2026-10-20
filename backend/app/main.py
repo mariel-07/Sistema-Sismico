@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+
 from app.api.routes.database import router as database_router
 from app.api.routes.events import router as events_router
 from app.api.routes.sources import router as sources_router
@@ -11,6 +12,10 @@ from app.api.routes.alerts import router as alerts_router
 from app.api.routes.ml import router as ml_router
 from app.api.routes.security import router as security_router
 
+
+# ============================================================
+# APLICACIÓN FASTAPI
+# ============================================================
 
 app = FastAPI(
     title=settings.APP_NAME or "SEPMS",
@@ -24,17 +29,39 @@ app = FastAPI(
 
 
 # ============================================================
-# CORS
+# CONFIGURACIÓN CORS
 # ============================================================
+#
+# Permite que el frontend desplegado en Vercel pueda consumir
+# correctamente la API desplegada en Render.
+#
+# IMPORTANTE:
+# - No usar allow_origins=["*"] junto con credenciales.
+# - Las URLs no deben terminar en "/".
+#
+
+ALLOWED_ORIGINS = [
+    # --------------------------------------------------------
+    # Vercel - URL ACTUAL
+    # --------------------------------------------------------
+    "https://sistema-sismico-fx9w-22rzbsrhp-mariel-8.vercel.app",
+
+    # --------------------------------------------------------
+    # Vercel - URL ANTERIOR
+    # --------------------------------------------------------
+    "https://sistema-sismico-3l87a88lu-mariel-8.vercel.app",
+
+    # --------------------------------------------------------
+    # Desarrollo local
+    # --------------------------------------------------------
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://sistema-sismico-fx9w-22rzbsrhp-mariel-8.vercel.app",
-        "https://sistema-sismico-3l87a88lu-mariel-8.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,7 +69,7 @@ app.add_middleware(
 
 
 # ============================================================
-# ROUTES
+# RUTAS API
 # ============================================================
 
 app.include_router(
@@ -87,7 +114,7 @@ app.include_router(
 
 
 # ============================================================
-# ROOT
+# RUTA PRINCIPAL
 # ============================================================
 
 @app.get("/")
@@ -99,6 +126,10 @@ def root():
         "status": "online",
     }
 
+
+# ============================================================
+# ESTADO DE LA API
+# ============================================================
 
 @app.get("/api/v1/status")
 def status():
