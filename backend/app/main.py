@@ -21,12 +21,11 @@ app = FastAPI(
     ),
 )
 
-
+# Configuración robusta de CORS compatible con cualquier URL de Vercel y local
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"https://.*\.vercel\.app",
-    allow_credentials=True,
+    allow_origins=["*"],  # Permite origen amplio de forma segura para la nube
+    allow_credentials=False,  # Debe ser False cuando allow_origins es ["*"] para evitar bloqueos de navegador
     allow_methods=["*"],
     allow_headers=["*"],
 )
