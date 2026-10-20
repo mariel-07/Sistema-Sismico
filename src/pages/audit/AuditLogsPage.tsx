@@ -30,6 +30,7 @@ import {
   type AuditLog,
 } from "../../services/api/auditLogs.api";
 import { getApiErrorMessage } from "../../services/api/client";
+import { getStoredLoginLocations, PERU_DEPARTMENTS_COORDS } from "../../utils/geolocation";
 
 type AuditResult = "Correcto" | "Rechazado" | "Error";
 
@@ -115,154 +116,7 @@ function getResultClass(result: AuditResult) {
   }
 }
 
-// Master list of seismic operations and monitoring hubs across Peru
-const PERU_CONNECTION_NODES = [
-  {
-    id: 1,
-    region: "Lima",
-    city: "Lima",
-    department: "Lima Metropolitana",
-    stationName: "Centro de Operaciones Sismológicas IGP - Sede Central",
-    latitude: -12.0464,
-    longitude: -77.0428,
-    baseIp: "192.168.10.45",
-    defaultUser: "admin@sepms.gob.pe",
-    weight: 24,
-  },
-  {
-    id: 2,
-    region: "Arequipa",
-    city: "Arequipa",
-    department: "Arequipa",
-    stationName: "Observatorio Vulcanológico y Sismológico Regional Sur (Characato)",
-    latitude: -16.409,
-    longitude: -71.5375,
-    baseIp: "190.119.42.18",
-    defaultUser: "operador.sur@sepms.gob.pe",
-    weight: 14,
-  },
-  {
-    id: 3,
-    region: "Cusco",
-    city: "Cusco",
-    department: "Cusco",
-    stationName: "Centro de Monitoreo Geofísico Andino (San Jerónimo)",
-    latitude: -13.5319,
-    longitude: -71.9675,
-    baseIp: "181.65.210.88",
-    defaultUser: "analista.cusco@sepms.gob.pe",
-    weight: 9,
-  },
-  {
-    id: 4,
-    region: "La Libertad",
-    city: "Trujillo",
-    department: "La Libertad",
-    stationName: "Estación Sismológica Costera Norte (Huanchaco)",
-    latitude: -8.1118,
-    longitude: -79.0287,
-    baseIp: "200.48.12.33",
-    defaultUser: "alerta.trujillo@sepms.gob.pe",
-    weight: 8,
-  },
-  {
-    id: 5,
-    region: "Piura",
-    city: "Piura",
-    department: "Piura",
-    stationName: "Nodo de Alerta Temprana Sísmica y Tsunami Norte",
-    latitude: -5.1945,
-    longitude: -80.6328,
-    baseIp: "190.223.75.12",
-    defaultUser: "sensor.piura@sepms.gob.pe",
-    weight: 7,
-  },
-  {
-    id: 6,
-    region: "Junín",
-    city: "Huancayo",
-    department: "Junín",
-    stationName: "Observatorio Geofísico Histórico de Huancayo (IGP)",
-    latitude: -12.0651,
-    longitude: -75.2049,
-    baseIp: "200.37.19.4",
-    defaultUser: "huancayo.geo@sepms.gob.pe",
-    weight: 11,
-  },
-  {
-    id: 7,
-    region: "Loreto",
-    city: "Iquitos",
-    department: "Loreto",
-    stationName: "Estación Sismológica Cuenca Amazónica (Maynas)",
-    latitude: -3.7491,
-    longitude: -73.2538,
-    baseIp: "181.66.14.90",
-    defaultUser: "selva.monitoreo@sepms.gob.pe",
-    weight: 5,
-  },
-  {
-    id: 8,
-    region: "Tacna",
-    city: "Tacna",
-    department: "Tacna",
-    stationName: "Estación Fronteriza Austral de Registro Acelerométrico",
-    latitude: -18.0146,
-    longitude: -70.2536,
-    baseIp: "190.41.80.20",
-    defaultUser: "auditor.tacna@sepms.gob.pe",
-    weight: 6,
-  },
-  {
-    id: 9,
-    region: "Puno",
-    city: "Puno",
-    department: "Puno",
-    stationName: "Nodo Sísmico Altiplano y Falla de Urcos",
-    latitude: -15.8402,
-    longitude: -70.0219,
-    baseIp: "181.64.99.105",
-    defaultUser: "operador.puno@sepms.gob.pe",
-    weight: 4,
-  },
-  {
-    id: 10,
-    region: "Áncash",
-    city: "Huaraz / Chimbote",
-    department: "Áncash",
-    stationName: "Estación Sísmica Callejón de Huaylas - Chimbote",
-    latitude: -9.5278,
-    longitude: -77.5278,
-    baseIp: "190.116.33.61",
-    defaultUser: "ancash.alerta@sepms.gob.pe",
-    weight: 7,
-  },
-  {
-    id: 11,
-    region: "Lambayeque",
-    city: "Chiclayo",
-    department: "Lambayeque",
-    stationName: "Estación Geofísica Lambayeque",
-    latitude: -6.7714,
-    longitude: -79.8409,
-    baseIp: "200.60.44.82",
-    defaultUser: "operador.chiclayo@sepms.gob.pe",
-    weight: 5,
-  },
-  {
-    id: 12,
-    region: "Moquegua",
-    city: "Moquegua / Ilo",
-    department: "Moquegua",
-    stationName: "Centro de Monitoreo Sísmico y Volcánico Moquegua",
-    latitude: -17.1983,
-    longitude: -70.9357,
-    baseIp: "190.235.101.5",
-    defaultUser: "moquegua.geo@sepms.gob.pe",
-    weight: 4,
-  },
-];
-
+// Nodos dinámicos calculados exclusivamente de los inicios de sesión reales de los usuarios
 // Helper to center the map programmatically when a location is clicked
 function MapCenterController({ center }: { center: [number, number] | null }) {
   const map = useMap();
@@ -322,52 +176,155 @@ export default function AuditLogsPage() {
     });
   }, [records, selectedYear]);
 
-  // Dynamically build Peru connection nodes with live data from records
+    // Construir ubicaciones del mapa ÚNICAMENTE para lugares donde usuarios han iniciado sesión
   const connections: ConnectionLocation[] = useMemo(() => {
-    const isFilteredToPast = selectedYear !== "Todos" && selectedYear !== "2026";
-    const yearNumber = selectedYear === "Todos" ? 2026 : parseInt(selectedYear, 10);
+    const storedLocations = getStoredLoginLocations();
 
-    return PERU_CONNECTION_NODES.map((node, index) => {
-      // Find matching or associated records for this region
-      const matchingLogs = recordsByYear.filter(
-        (r) =>
-          r.actor.toLowerCase().includes(node.region.toLowerCase()) ||
-          r.ip.startsWith(node.baseIp.slice(0, 7)) ||
-          r.description.toLowerCase().includes(node.region.toLowerCase())
+    // 1. Filtrar registros de auditoría correspondientes a inicio de sesión
+    const loginRecords = recordsByYear.filter(
+      (r) =>
+        r.action.toLowerCase().includes("inicio") ||
+        r.action.toLowerCase().includes("login") ||
+        r.description.toLowerCase().includes("inicio de sesión"),
+    );
+
+    const locationMap = new Map<
+      string,
+      {
+        id: number;
+        region: string;
+        city: string;
+        department: string;
+        stationName: string;
+        latitude: number;
+        longitude: number;
+        connections: number;
+        lastSeen: string;
+        ip: string;
+        user: string;
+        users: Set<string>;
+      }
+    >();
+
+    let nextId = 1;
+
+    // Procesar cada registro de inicio de sesión real
+    loginRecords.forEach((record) => {
+      const coordMatch = record.description.match(
+        /\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)/,
       );
 
-      // Calculate connections based on records and node weight
-      const count = matchingLogs.length > 0
-        ? matchingLogs.length * 3 + node.weight
-        : Math.max(1, Math.round(node.weight * (isFilteredToPast ? 0.7 : 1)));
+      let lat: number | null = coordMatch ? parseFloat(coordMatch[1]) : null;
+      let lng: number | null = coordMatch ? parseFloat(coordMatch[2]) : null;
+      let city = "";
+      let region = "";
+      let department = "";
 
-      const activeUser = matchingLogs.length > 0
-        ? matchingLogs[0].actor
-        : (recordsByYear[index % Math.max(1, recordsByYear.length)]?.actor || node.defaultUser);
+      const storedMatch = storedLocations.find(
+        (sl) => sl.email.toLowerCase() === record.actor.toLowerCase(),
+      );
 
-      const activeIp = matchingLogs.length > 0
-        ? matchingLogs[0].ip
-        : (recordsByYear[index % Math.max(1, recordsByYear.length)]?.ip || node.baseIp);
+      if (storedMatch) {
+        if (lat === null || lng === null) {
+          lat = storedMatch.latitude;
+          lng = storedMatch.longitude;
+        }
+        city = storedMatch.city;
+        region = storedMatch.region;
+        department = storedMatch.department;
+      }
 
-      const timestamp = matchingLogs.length > 0
-        ? formatDate(matchingLogs[0].timestamp)
-        : `19/10/${yearNumber}, ${14 - (index % 6)}:${(index * 13) % 60 < 10 ? "0" : ""}${(index * 13) % 60}`;
+      if (!region) {
+        const textToSearch = `${record.description} ${record.actor}`.toLowerCase();
+        for (const [deptKey, deptInfo] of Object.entries(PERU_DEPARTMENTS_COORDS)) {
+          if (textToSearch.includes(deptKey)) {
+            if (lat === null || lng === null) {
+              lat = deptInfo.latitude;
+              lng = deptInfo.longitude;
+            }
+            city = deptInfo.city;
+            region = deptInfo.city;
+            department = deptInfo.department;
+            break;
+          }
+        }
+      }
 
-      return {
-        id: node.id,
-        region: node.region,
-        city: node.city,
-        department: node.department,
-        stationName: node.stationName,
-        latitude: node.latitude,
-        longitude: node.longitude,
-        connections: count,
-        lastSeen: timestamp,
-        ip: activeIp,
-        user: activeUser,
-      };
+      if (lat === null || lng === null) {
+        lat = -12.0464;
+        lng = -77.0428;
+        city = "Lima";
+        region = "Lima";
+        department = "Lima Metropolitana";
+      }
+
+      const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+
+      if (locationMap.has(key)) {
+        const existing = locationMap.get(key)!;
+        existing.connections += 1;
+        existing.users.add(record.actor);
+        if (new Date(record.timestamp).getTime() >= new Date(existing.lastSeen).getTime()) {
+          existing.lastSeen = formatDate(record.timestamp);
+          existing.user = record.actor;
+          existing.ip = record.ip;
+        }
+      } else {
+        const usersSet = new Set<string>();
+        usersSet.add(record.actor);
+        locationMap.set(key, {
+          id: nextId++,
+          region: region || city,
+          city,
+          department: department || `${city}, Perú`,
+          stationName: `Terminal de Usuario - ${city}`,
+          latitude: lat,
+          longitude: lng,
+          connections: 1,
+          lastSeen: formatDate(record.timestamp),
+          ip: record.ip || "127.0.0.1",
+          user: record.actor,
+          users: usersSet,
+        });
+      }
     });
-  }, [recordsByYear, selectedYear]);
+
+    storedLocations.forEach((stored) => {
+      const key = `${stored.latitude.toFixed(3)},${stored.longitude.toFixed(3)}`;
+      if (!locationMap.has(key)) {
+        const usersSet = new Set<string>();
+        usersSet.add(stored.email);
+        locationMap.set(key, {
+          id: nextId++,
+          region: stored.region || stored.city,
+          city: stored.city,
+          department: stored.department,
+          stationName: `Terminal de Usuario - ${stored.city}`,
+          latitude: stored.latitude,
+          longitude: stored.longitude,
+          connections: 1,
+          lastSeen: formatDate(stored.timestamp),
+          ip: stored.ip,
+          user: stored.email,
+          users: usersSet,
+        });
+      }
+    });
+
+    return Array.from(locationMap.values()).map((loc) => ({
+      id: loc.id,
+      region: loc.region,
+      city: loc.city,
+      department: loc.department,
+      stationName: loc.stationName,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      connections: loc.connections,
+      lastSeen: loc.lastSeen,
+      ip: loc.ip,
+      user: loc.users.size > 1 ? `${loc.user} (+${loc.users.size - 1} más)` : loc.user,
+    }));
+  }, [recordsByYear]);
 
   const modules = useMemo(
     () => [...new Set(recordsByYear.map((record) => record.module))].sort(),
@@ -575,9 +532,9 @@ export default function AuditLogsPage() {
         <div className="panel-heading audit-map-heading">
           <div>
             <span className="eyebrow">DISTRIBUCIÓN GEOGRÁFICA EN EL MAPA DEL PERÚ</span>
-            <h2>Mapa de conexiones y estaciones sísmicas del Perú</h2>
+            <h2>Mapa de ubicaciones de usuarios con sesión iniciada</h2>
             <p>
-              Visualiza en el mapa oficial del Perú los puntos exactos desde donde se conectan los usuarios, operadores y centros sismológicos regionales.
+              Muestra exclusivamente las ubicaciones geográficas desde donde los usuarios han iniciado sesión en el sistema.
             </p>
           </div>
 
@@ -613,10 +570,10 @@ export default function AuditLogsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <span className="audit-map-legend">
               <span />
-              Nodo activo de monitoreo
+              Ubicación de usuario con sesión iniciada
             </span>
             <span style={{ fontSize: "12px", color: "#64748b" }}>
-              Total de regiones operativas: <strong>{connections.length}</strong>
+              Ubicaciones con inicio de sesión: <strong>{connections.length}</strong>
             </span>
           </div>
         </div>
@@ -637,6 +594,14 @@ export default function AuditLogsPage() {
               />
 
               <MapCenterController center={mapCenterCoords} />
+
+              {filteredConnections.length === 0 && (
+                <div className="audit-map-empty-overlay">
+                  <MapPin size={28} />
+                  <strong>Sin inicios de sesión en este filtro</strong>
+                  <p>El mapa muestra exclusivamente las ubicaciones de los usuarios que han iniciado sesión en el sistema.</p>
+                </div>
+              )}
 
               {filteredConnections.map((location) => {
                 const isSelected = selectedConnection?.id === location.id;
@@ -688,7 +653,7 @@ export default function AuditLogsPage() {
           <aside className="audit-region-list">
             <h3>
               <MapPinned size={17} />
-              Sedes de conexión ({selectedYear})
+              Sedes con inicio de sesión ({selectedYear})
             </h3>
 
             {filteredConnections
@@ -727,7 +692,7 @@ export default function AuditLogsPage() {
             )}
 
             <p className="audit-region-disclaimer">
-              📍 Ubicaciones geográficas de conexión en el territorio peruano correspondientes a centros de monitoreo, terminales e IPs registradas.
+              📍 Ubicaciones geográficas marcadas exclusivamente para los lugares donde los usuarios han iniciado sesión en el sistema.
             </p>
           </aside>
         </div>

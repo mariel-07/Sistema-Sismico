@@ -36,6 +36,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.production
 node_modules/
 dist/
 venv/
@@ -47,6 +48,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.production
 **/*.bak
 **/*.backup.*
 **/*.phase14.bak

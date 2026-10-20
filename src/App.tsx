@@ -23,6 +23,7 @@ import SettingsPage from "./pages/settings/SettingsPage";
 import TechnicalGuidesPage from "./pages/help/TechnicalGuidesPage";
 import HelpCenterPage from "./pages/help/HelpCenterPage";
 import LoginPage from "./pages/LoginPage";
+import LandingPage from "./pages/landing/LandingPage";
 import { useAuth } from "./hooks/useAuth";
 
 // Componente para validar si el usuario tiene el rol requerido
@@ -58,7 +59,6 @@ function ProtectedRoutes() {
     <Routes>
       <Route element={<MainLayout />}>
         {/* Rutas accesibles por todos los usuarios autenticados */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/map" element={<LiveMapPage />} />
@@ -165,7 +165,7 @@ function ProtectedRoutes() {
           }
         />
 
-        {/* Ruta por defecto */}
+        {/* Ruta por defecto para usuarios autenticados */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
@@ -176,6 +176,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<ProtectedRoutes />} />
       </Routes>

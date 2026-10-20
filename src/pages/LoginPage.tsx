@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -67,6 +67,27 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-card">
+        {/* Enlace para volver a la Landing Page */}
+        <div style={{ marginBottom: "1.25rem" }}>
+          <Link
+            to="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              fontSize: "0.84rem",
+              color: "#94a3b8",
+              textDecoration: "none",
+              fontWeight: 500,
+              transition: "color 0.2s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#2dd4bf")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+          >
+            &larr; Volver a la p&aacute;gina principal
+          </Link>
+        </div>
+
         {/* Cabecera del formulario */}
         <header className="login-header">
           <div

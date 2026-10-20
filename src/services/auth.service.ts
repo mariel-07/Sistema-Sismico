@@ -1,4 +1,5 @@
-﻿import { apiClient } from "./api/client";
+import { apiClient } from "./api/client";
+import { detectClientLocation, saveUserLoginLocation } from "../utils/geolocation";
 
 export type UserRole =
   | "Administrador"
@@ -27,13 +28,43 @@ const USER_KEY = "sepms_auth_user";
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthUser> {
-    const response = await apiClient.post<LoginResponse>("/auth/login", {
+    let clientLoc = null;
+    try {
+      clientLoc = await detectClientLocation();
+    } catch {
+      // Ignorar fallo de geolocalización
+    }
+
+    const payload: Record<string, unknown> = {
       email,
       password,
-    });
+    };
+
+    if (clientLoc) {
+      payload.city = clientLoc.city;
+      payload.region = clientLoc.region;
+      payload.latitude = clientLoc.latitude;
+      payload.longitude = clientLoc.longitude;
+    }
+
+    const response = await apiClient.post<LoginResponse>("/auth/login", payload);
 
     sessionStorage.setItem(TOKEN_KEY, response.data.access_token);
     sessionStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+
+    if (clientLoc) {
+      saveUserLoginLocation({
+        email: response.data.user.email,
+        role: response.data.user.role,
+        city: clientLoc.city,
+        region: clientLoc.region,
+        department: clientLoc.department,
+        latitude: clientLoc.latitude,
+        longitude: clientLoc.longitude,
+        ip: clientLoc.ip || "127.0.0.1",
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return response.data.user;
   },

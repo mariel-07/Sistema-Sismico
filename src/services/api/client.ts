@@ -1,8 +1,13 @@
-﻿import axios from "axios";
+import axios from "axios";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.trim() ||
-  "http://127.0.0.1:8000/api/v1";
+// URL base de la API. Conexión por defecto a Render si no se define variable de entorno.
+const rawApiUrl =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+  "https://sistema-sismico-vg5i.onrender.com/api/v1";
+
+const API_BASE_URL = rawApiUrl.endsWith("/api/v1")
+  ? rawApiUrl
+  : `${rawApiUrl.replace(/\/+$/, "")}/api/v1`;
 
 const TOKEN_KEY = "sepms_access_token";
 const USER_KEY = "sepms_auth_user";
@@ -47,7 +52,7 @@ export function getApiErrorMessage(error: unknown): string {
     if (error.code === "ECONNABORTED") {
       return "La solicitud tardó demasiado.";
     }
-    return "No se pudo conectar con FastAPI. Verifica que el backend esté activo.";
+    return "No se pudo conectar con el servidor (FastAPI en Render). Verifica tu conexión o el estado del servicio.";
   }
   return "Ocurrió un error inesperado.";
 }

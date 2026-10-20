@@ -839,3 +839,8 @@
     flex-direction: column;
   }
 }
+
+.audit-map-empty-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(45, 212, 191, 0.3); border-radius: 12px; padding: 1.5rem 2rem; text-align: center; z-index: 1000; max-width: 380px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); pointer-events: none; }
+.audit-map-empty-overlay svg { color: #2dd4bf; margin-bottom: 0.5rem; }
+.audit-map-empty-overlay strong { display: block; font-size: 1rem; color: #ffffff; margin-bottom: 0.35rem; }
+.audit-map-empty-overlay p { font-size: 0.85rem; color: #94a3b8; margin: 0; line-height: 1.5; }

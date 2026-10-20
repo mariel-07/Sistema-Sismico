@@ -30,6 +30,10 @@ ROLES = {
 class LoginInput(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=200)
+    city: str | None = None
+    region: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class UserCreate(BaseModel):
@@ -164,12 +168,33 @@ def login(
         except (ValueError, TypeError):
             valid = False
 
+    loc_desc = ""
+    if data.city or data.region or (data.latitude is not None and data.longitude is not None):
+        parts = [p for p in [data.city, data.region] if p]
+        coords = f" ({data.latitude:.4f}, {data.longitude:.4f})" if data.latitude is not None and data.longitude is not None else ""
+        loc_desc = f" desde {', '.join(parts)}{coords}"
+
     if not valid or user is None or not user.is_active:
-        _audit(db, request, "inicio_sesion", "Fallido", "Credenciales inválidas o cuenta inactiva.", resource=email)
+        _audit(
+            db,
+            request,
+            "inicio_sesion",
+            "Fallido",
+            f"Credenciales inválidas o cuenta inactiva{loc_desc}.",
+            resource=email,
+        )
         db.commit()
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
 
-    _audit(db, request, "inicio_sesion", "Correcto", "Inicio de sesión correcto.", user, email)
+    _audit(
+        db,
+        request,
+        "inicio_sesion",
+        "Correcto",
+        f"Inicio de sesión correcto{loc_desc}.",
+        user,
+        email,
+    )
     db.commit()
     return {
         "access_token": _token(user),
@@ -265,12 +290,6 @@ def update_user(
         changes.get("role", user.role) != "Administrador"
         or changes.get("is_active", user.is_active) is False
     ):
-        active_admins = db.scalar(
-            select(SecurityUser).where(
-                SecurityUser.role == "Administrador",
-                SecurityUser.is_active.is_(True),
-            ).with_only_columns(SecurityUser.id)
-        )
         admins = list(
             db.scalars(
                 select(SecurityUser).where(
