@@ -11,6 +11,7 @@ from app.api.routes.alerts import router as alerts_router
 from app.api.routes.ml import router as ml_router
 from app.api.routes.security import router as security_router
 
+
 app = FastAPI(
     title=settings.APP_NAME or "SEPMS",
     version=settings.APP_VERSION or "2.0.0",
@@ -21,40 +22,73 @@ app = FastAPI(
     ),
 )
 
-# Configuración robusta de CORS compatible con cualquier URL de Vercel y local
+
+# ============================================================
+# CORS
+# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite origen amplio de forma segura para la nube
-    allow_credentials=False,  # Debe ser False cuando allow_origins es ["*"] para evitar bloqueos de navegador
+    allow_origins=[
+        "https://sistema-sismico-fx9w-22rzbsrhp-mariel-8.vercel.app",
+        "https://sistema-sismico-3l87a88lu-mariel-8.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# ============================================================
+# ROUTES
+# ============================================================
+
 app.include_router(
     database_router,
     prefix=settings.API_V1_PREFIX,
 )
+
 app.include_router(
     events_router,
     prefix=settings.API_V1_PREFIX,
 )
+
 app.include_router(
     sources_router,
     prefix=settings.API_V1_PREFIX,
 )
+
 app.include_router(
     ingestion_router,
     prefix=settings.API_V1_PREFIX,
 )
+
 app.include_router(
     datasets_router,
     prefix=settings.API_V1_PREFIX,
 )
-app.include_router(alerts_router, prefix=settings.API_V1_PREFIX)
-app.include_router(ml_router, prefix=settings.API_V1_PREFIX)
-app.include_router(security_router, prefix=settings.API_V1_PREFIX)
 
+app.include_router(
+    alerts_router,
+    prefix=settings.API_V1_PREFIX,
+)
+
+app.include_router(
+    ml_router,
+    prefix=settings.API_V1_PREFIX,
+)
+
+app.include_router(
+    security_router,
+    prefix=settings.API_V1_PREFIX,
+)
+
+
+# ============================================================
+# ROOT
+# ============================================================
 
 @app.get("/")
 def root():
