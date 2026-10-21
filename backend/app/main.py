@@ -45,7 +45,7 @@ ALLOWED_ORIGINS = [
     # Vercel - URL ACTUAL
     # --------------------------------------------------------
     "https://sistema-sismico-fx9w-22rzbsrhp-mariel-8.vercel.app",
-
+"https://sistema-sismico-fx9w-git-main-mariel-8.vercel.app",
     # --------------------------------------------------------
     # Vercel - URL ANTERIOR
     # --------------------------------------------------------
